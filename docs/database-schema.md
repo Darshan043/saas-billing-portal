@@ -1,6 +1,6 @@
 # Database schema
 
-Core Postgres schema owned by the backend Prisma project (`backend/prisma/schema.prisma`). Money is always integer minor units plus a 3-letter currency code. The payment simulator has its own data in a later step. pg-boss (Step 8) creates a separate schema and is not modelled here.
+Core Postgres schema owned by the backend Prisma project (`backend/prisma/schema.prisma`). Money is always integer minor units plus a 3-letter currency code. The payment simulator stores its own data in a separate Postgres database (`billinghub_sim`, Prisma project `simulator/prisma`). It does not share tables with BillingHub. See [payment-simulator.md](payment-simulator.md). pg-boss (Step 8) creates a separate schema and is not modelled here.
 
 ## Entity relationship diagram
 
