@@ -13,6 +13,11 @@ const registerSchema = z.object({
     .max(72, 'Password must be at most 72 characters')
     .regex(/[A-Za-z]/, 'Password must include a letter')
     .regex(/[0-9]/, 'Password must include a number'),
+  organizationName: z
+    .string()
+    .trim()
+    .min(2, 'Organization name must be at least 2 characters')
+    .max(100),
 });
 
 function destinationFor(role: 'CUSTOMER' | 'ADMIN'): string {
@@ -26,6 +31,7 @@ export function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -37,7 +43,12 @@ export function Register() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setServerError(null);
-    const parsed = registerSchema.safeParse({ name, email, password });
+    const parsed = registerSchema.safeParse({
+      name,
+      email,
+      password,
+      organizationName,
+    });
     if (!parsed.success) {
       const next: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
@@ -56,6 +67,7 @@ export function Register() {
         parsed.data.name,
         parsed.data.email,
         parsed.data.password,
+        parsed.data.organizationName,
       );
       navigate(destinationFor(created.role), { replace: true });
     } catch (err) {
@@ -103,6 +115,17 @@ export function Register() {
           />
           {fieldErrors.email && (
             <span className="field-error">{fieldErrors.email}</span>
+          )}
+        </label>
+        <label>
+          Organization name
+          <input
+            type="text"
+            value={organizationName}
+            onChange={(event) => setOrganizationName(event.target.value)}
+          />
+          {fieldErrors.organizationName && (
+            <span className="field-error">{fieldErrors.organizationName}</span>
           )}
         </label>
         <label>

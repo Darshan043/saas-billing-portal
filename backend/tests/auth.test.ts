@@ -5,21 +5,10 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { env } from '../src/config/env';
 import { prisma } from '../src/lib/prisma';
 import { assertTestDatabase, TEST_DATABASE_NAME } from './dbSafety';
+import { TEST_PASSWORD, clearTestUsersAndOrgs, cookieHeader, importApp } from './helpers';
 
-const password = 'Password1';
-
-async function importApp() {
-  const mod = await import('../src/app');
-  return mod.app;
-}
-
-function cookieHeader(
-  header: string[] | string | undefined,
-  name: string,
-): string | undefined {
-  const parts = Array.isArray(header) ? header : header ? [header] : [];
-  return parts.find((item) => item.startsWith(`${name}=`));
-}
+const password = TEST_PASSWORD;
+const organizationName = 'Ada Org';
 
 describe('auth', () => {
   beforeEach(async () => {
@@ -28,7 +17,7 @@ describe('auth', () => {
       SELECT current_database()
     `;
     expect(rows[0]?.current_database).toBe(TEST_DATABASE_NAME);
-    await prisma.user.deleteMany();
+    await clearTestUsersAndOrgs();
   });
 
   afterAll(async () => {
@@ -41,6 +30,7 @@ describe('auth', () => {
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       password,
+      organizationName,
     });
 
     expect(res.status).toBe(201);
@@ -48,6 +38,10 @@ describe('auth', () => {
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       role: 'CUSTOMER',
+      organization: {
+        name: organizationName,
+        membershipRole: 'OWNER',
+      },
     });
     expect(res.body.user.id).toEqual(expect.any(String));
     expect(res.body.user).not.toHaveProperty('passwordHash');
@@ -65,6 +59,7 @@ describe('auth', () => {
       name: 'Ada',
       email: 'Ada@Example.COM',
       password,
+      organizationName,
     });
     expect(first.status).toBe(201);
     expect(first.body.user.email).toBe('ada@example.com');
@@ -73,6 +68,7 @@ describe('auth', () => {
       name: 'Ada 2',
       email: 'ADA@example.com',
       password,
+      organizationName,
     });
     expect(second.status).toBe(409);
     expect(second.body.error.code).toBe('EMAIL_ALREADY_EXISTS');
@@ -85,6 +81,7 @@ describe('auth', () => {
       email: 'hacker@example.com',
       password,
       role: 'ADMIN',
+      organizationName,
     });
     expect(res.status).toBe(201);
     expect(res.body.user.role).toBe('CUSTOMER');
@@ -101,6 +98,7 @@ describe('auth', () => {
       name: 'Ada',
       email: 'not-an-email',
       password,
+      organizationName,
     });
     expect(invalidEmail.status).toBe(400);
     expect(invalidEmail.body.error.code).toBe('VALIDATION_ERROR');
@@ -114,6 +112,7 @@ describe('auth', () => {
       name: 'Ada',
       email: 'ada2@example.com',
       password: 'Ab1',
+      organizationName,
     });
     expect(shortPassword.status).toBe(400);
     expect(shortPassword.body.error.details).toEqual(
@@ -126,6 +125,7 @@ describe('auth', () => {
       name: 'Ada',
       email: 'ada3@example.com',
       password: 'Password',
+      organizationName,
     });
     expect(noNumber.status).toBe(400);
     expect(noNumber.body.error.details).toEqual(
@@ -137,6 +137,7 @@ describe('auth', () => {
     const missingName = await request(app).post('/auth/register').send({
       email: 'ada4@example.com',
       password,
+      organizationName,
     });
     expect(missingName.status).toBe(400);
     expect(missingName.body.error.details).toEqual(
@@ -152,6 +153,7 @@ describe('auth', () => {
       name: 'Ada',
       email: 'ada@example.com',
       password,
+      organizationName,
     });
 
     const success = await request(app).post('/auth/login').send({
@@ -194,6 +196,7 @@ describe('auth', () => {
       name: 'Ada',
       email: 'ada@example.com',
       password,
+      organizationName,
     });
     const cookie = cookieHeader(registered.headers['set-cookie'], env.COOKIE_NAME);
     expect(cookie).toBeDefined();
@@ -235,6 +238,7 @@ describe('auth', () => {
       name: 'Ada',
       email: 'ada@example.com',
       password,
+      organizationName,
     });
 
     const logout = await agent.post('/auth/logout');
@@ -253,6 +257,7 @@ describe('auth', () => {
       name: 'Customer',
       email: 'customer@example.com',
       password,
+      organizationName,
     });
     const customerCookie = cookieHeader(
       customer.headers['set-cookie'],
@@ -293,6 +298,7 @@ describe('auth', () => {
       name: 'Ada',
       email: 'ada@example.com',
       password,
+      organizationName,
     });
     expect(JSON.stringify(res.body)).not.toContain(password);
     expect(res.body.user).not.toHaveProperty('passwordHash');

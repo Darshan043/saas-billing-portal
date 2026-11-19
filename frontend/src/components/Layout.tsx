@@ -26,8 +26,16 @@ export function Layout() {
           {user && (
             <>
               <Link to="/app">App</Link>
+              {user.role === 'CUSTOMER' && user.organization && (
+                <Link to="/app/settings/organization">Organization settings</Link>
+              )}
               {user.role === 'ADMIN' && <Link to="/admin">Admin</Link>}
-              <span className="nav-user">{user.name}</span>
+              <span className="nav-user">
+                {user.name}
+                {user.role === 'CUSTOMER' && user.organization
+                  ? ` · ${user.organization.name}`
+                  : ''}
+              </span>
               <button
                 type="button"
                 className="link-button"

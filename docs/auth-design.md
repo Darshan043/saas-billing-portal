@@ -15,13 +15,15 @@ BillingHub authenticates with a **JWT in an httpOnly cookie**. There is no token
 
 `authenticate` loads the user from the database (inactive or missing users are 401). `requireRole` returns 403 when the role does not match.
 
+Register creates a `CUSTOMER` user, an organization, and an `OWNER` membership in one transaction. Login and `/auth/me` include `organization: { id, name, membershipRole }` or `null` (admins and any user without a membership). Organization design: [docs/organizations.md](organizations.md).
+
 ## Deliberately not included
 
 - Password reset
 - Email verification
 - Refresh tokens
 - Social login
-- Organization creation on register (Step 4)
+- Inviting members, multiple organizations per user, or switching organizations
 
 ## Error shape
 

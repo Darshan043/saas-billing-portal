@@ -76,6 +76,11 @@ dd {
   margin: 0;
 }
 
+.success {
+  color: #166534;
+  margin: 0;
+}
+
 .pill {
   display: inline-block;
   border-radius: 999px;
