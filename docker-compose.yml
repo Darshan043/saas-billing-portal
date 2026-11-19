@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    env_file:
+      - .env
+    environment:
+      PORT: ${BACKEND_PORT:-4000}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SIMULATOR_URL: http://simulator:4100
+      FRONTEND_ORIGIN: http://localhost:5173
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile
+    ports:
+      - "${SIMULATOR_PORT:-4100}:4100"
+    env_file:
+      - .env
+    environment:
+      PORT: ${SIMULATOR_PORT:-4100}
+      BACKEND_WEBHOOK_URL: http://backend:4000/webhooks/payments
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./simulator:/app
+      - /app/node_modules
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
