@@ -188,3 +188,101 @@ dd {
   color: #b91c1c;
   font-size: 0.85rem;
 }
+
+.page-wide {
+  max-width: 72rem;
+}
+
+.form-wide {
+  max-width: 32rem;
+}
+
+.form textarea,
+.form select {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.billing-toggle {
+  display: inline-flex;
+  margin: 0 0 1.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.billing-toggle button {
+  border: 0;
+  background: transparent;
+  padding: 0.45rem 1rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.billing-toggle .toggle-active {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.plan-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.plan-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+}
+
+.plan-price {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0.5rem 0;
+}
+
+.feature-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.feature-list.compact {
+  margin: 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.data-table th {
+  color: #475569;
+  font-weight: 600;
+}

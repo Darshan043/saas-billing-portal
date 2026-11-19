@@ -1,6 +1,6 @@
 # BillingHub
 
-BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, and organization accounts. Plans, subscriptions, and payments are not implemented yet.
+BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, organization accounts, and a versioned plan catalogue. Subscriptions and payments are not implemented yet.
 
 The payment provider in this project is a **SIMULATOR**. It is clearly labelled and never moves real money.
 
@@ -71,6 +71,11 @@ The current organization is **always derived from the logged-in user's membershi
 | GET | `/auth/me` | Cookie | Current user, including `organization` or `null` |
 | GET | `/auth/ping-customer` | Cookie | Demo: any signed-in user |
 | GET | `/admin/ping` | Cookie + ADMIN | Demo: admin-only |
+| GET | `/plans` | No | Active plans and current MONTH/YEAR prices only (public catalogue) |
+| GET | `/admin/plans` | Cookie + ADMIN | All plans, including inactive, with current prices |
+| GET | `/admin/plans/:id` | Cookie + ADMIN | One plan |
+| POST | `/admin/plans` | Cookie + ADMIN | Create a plan and its first monthly and yearly prices |
+| PATCH | `/admin/plans/:id` | Cookie + ADMIN | Update plan details, active flag, and/or version a price |
 | POST | `/orgs` | Cookie | Body `{ name, billingEmail? }`. For customers who have no organization yet. ADMIN is 403. Already a member is 409 |
 | GET | `/orgs/current` | Cookie + organization | Current organization (no `providerCustomerId` / `nextInvoiceNumber`) |
 | PATCH | `/orgs/current` | Cookie + organization + OWNER | Body `{ name?, billingEmail? }` (at least one field). MEMBER is 403 |
@@ -89,7 +94,11 @@ Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` fro
 }
 ```
 
-`details` is optional. Auth-related codes include `INVALID_CREDENTIALS`, `UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_DISABLED`, `EMAIL_ALREADY_EXISTS`, `ORGANIZATION_ALREADY_EXISTS`, `ORGANIZATION_REQUIRED`, `RATE_LIMITED`, `INVALID_JSON`, `NOT_FOUND`.
+`details` is optional. Auth-related codes include `INVALID_CREDENTIALS`, `UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_DISABLED`, `EMAIL_ALREADY_EXISTS`, `ORGANIZATION_ALREADY_EXISTS`, `ORGANIZATION_REQUIRED`, `PLAN_NAME_EXISTS`, `PLAN_NOT_FOUND`, `RATE_LIMITED`, `INVALID_JSON`, `NOT_FOUND`.
+
+### Plans and prices
+
+Money is stored as integer minor units plus a 3-letter currency (`USD` default; also `INR`, `EUR`, `GBP`). Billing intervals are `MONTH` and `YEAR`. Changing a price retires the previous `plan_prices` row (`isActive = false`, `retiredAt` set) and inserts a new current row. Existing subscriptions will keep the old price id in later steps. Public UI: http://localhost:5173/pricing . Admin UI: http://localhost:5173/admin/plans . Design notes: [docs/plan-management.md](docs/plan-management.md).
 
 ### Auth env variables
 
@@ -179,3 +188,4 @@ saas-billing-portal/
 - [docs/database-schema.md](docs/database-schema.md) — Prisma schema, ER diagram, and key constraints
 - [docs/auth-design.md](docs/auth-design.md) — cookie JWT, roles, and what is not included
 - [docs/organizations.md](docs/organizations.md) — one org per user, OWNER vs MEMBER, and scoping rules
+- [docs/plan-management.md](docs/plan-management.md) — catalogue, admin plans, and price versioning

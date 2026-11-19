@@ -10,6 +10,10 @@ import { notFound } from './middleware/notFound';
 import { adminRouter } from './modules/admin/admin.routes';
 import { authRouter } from './modules/auth/auth.routes';
 import { organizationsRouter } from './modules/organizations/organizations.routes';
+import {
+  adminPlansRouter,
+  publicPlansRouter,
+} from './modules/plans/plans.routes';
 import { healthRouter } from './routes/health';
 
 export const app = express();
@@ -53,6 +57,8 @@ app.use(
 app.use(healthRouter);
 app.use('/auth', authRouter);
 app.use('/orgs', organizationsRouter);
+app.use('/plans', publicPlansRouter);
+app.use('/admin/plans', adminPlansRouter);
 app.use('/admin', adminRouter);
 
 app.use(notFound);
