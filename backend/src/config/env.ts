@@ -9,6 +9,12 @@ const envSchema = z.object({
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),
   WEBHOOK_SIGNING_SECRET: z.string().min(1),
+  SEED_ADMIN_EMAIL: z.string().email().optional(),
+  SEED_ADMIN_PASSWORD: z.string().min(1).optional(),
+  JWT_SECRET: z.string().min(32),
+  JWT_EXPIRES_IN: z.string().min(1).default('7d'),
+  COOKIE_NAME: z.string().min(1).default('billing_token'),
+  TEST_DATABASE_URL: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
 
 const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
@@ -15,6 +17,7 @@ type LoadState =
   | { kind: 'error'; message: string };
 
 export function Home() {
+  const { user } = useAuth();
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
 
   useEffect(() => {
@@ -45,13 +48,25 @@ export function Home() {
   }, []);
 
   return (
-    <div className="page">
-      <header>
-        <h1>BillingHub</h1>
-        <p className="subtitle">
-          Subscription billing and customer portal (development skeleton)
+    <main className="page">
+      <h1>BillingHub</h1>
+      <p className="subtitle">
+        Subscription billing and customer portal
+      </p>
+
+      {!user && (
+        <p className="home-actions">
+          <Link to="/login">Login</Link>
+          <Link to="/register">Register</Link>
         </p>
-      </header>
+      )}
+      {user && (
+        <p className="home-actions">
+          <Link to={user.role === 'ADMIN' ? '/admin' : '/app'}>
+            Go to {user.role === 'ADMIN' ? 'admin' : 'app'}
+          </Link>
+        </p>
+      )}
 
       <section className="status-box" aria-live="polite">
         <h2>System status</h2>
@@ -85,6 +100,6 @@ export function Home() {
           </dl>
         )}
       </section>
-    </div>
+    </main>
   );
 }

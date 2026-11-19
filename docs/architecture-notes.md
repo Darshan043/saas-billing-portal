@@ -11,7 +11,7 @@ Fixed decisions for this project. Later steps should follow these instead of ren
 - Backend and simulator: Express and TypeScript (`tsx watch` in development, `tsc` for production builds)
 - Config validation: Zod (fail fast on missing or invalid env)
 - Logging: pino
-- Database client for now: `pg` (Prisma is added in Step 2)
+- ORM: Prisma 6 (`@prisma/client`). Health check still uses the `pg` Pool (`SELECT 1`).
 - Lint/format: ESLint flat config + typescript-eslint + Prettier (`eslint-config-prettier`)
 - Tests: Vitest in backend and simulator
 
