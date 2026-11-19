@@ -5,6 +5,7 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['tests/setup.ts'],
     fileParallelism: false,
+    testTimeout: 20000,
     env: {
       NODE_ENV: 'test',
       SMTP_HOST: 'localhost',

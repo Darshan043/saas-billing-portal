@@ -1,6 +1,6 @@
 # BillingHub
 
-BillingHub is a subscription-based SaaS billing and customer portal. This repository currently contains the project skeleton only: three TypeScript apps (React frontend, Express backend, Express payment simulator), Docker Compose, Postgres, and Mailpit. No real payments, authentication, or billing logic exist yet.
+BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, and organization accounts. Plans, subscriptions, and payments are not implemented yet.
 
 The payment provider in this project is a **SIMULATOR**. It is clearly labelled and never moves real money.
 
@@ -61,14 +61,19 @@ Stop with `Ctrl+C`, or `docker compose down`. Add `-v` only if you also want to 
 
 The API uses an httpOnly JWT cookie. The browser client always sends `credentials: "include"`. Design notes: [docs/auth-design.md](docs/auth-design.md).
 
+The current organization is **always derived from the logged-in user's membership**. Clients never send an organization id for their own data.
+
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
-| POST | `/auth/register` | No | Create a CUSTOMER user and set the session cookie |
-| POST | `/auth/login` | No | Sign in and set the session cookie |
+| POST | `/auth/register` | No | Body `{ name, email, password, organizationName }`. Creates CUSTOMER + organization + OWNER membership in one transaction and sets the session cookie |
+| POST | `/auth/login` | No | Sign in and set the session cookie. User includes `organization` or `null` |
 | POST | `/auth/logout` | No | Clear the cookie |
-| GET | `/auth/me` | Cookie | Current user |
+| GET | `/auth/me` | Cookie | Current user, including `organization` or `null` |
 | GET | `/auth/ping-customer` | Cookie | Demo: any signed-in user |
 | GET | `/admin/ping` | Cookie + ADMIN | Demo: admin-only |
+| POST | `/orgs` | Cookie | Body `{ name, billingEmail? }`. For customers who have no organization yet. ADMIN is 403. Already a member is 409 |
+| GET | `/orgs/current` | Cookie + organization | Current organization (no `providerCustomerId` / `nextInvoiceNumber`) |
+| PATCH | `/orgs/current` | Cookie + organization + OWNER | Body `{ name?, billingEmail? }` (at least one field). MEMBER is 403 |
 
 Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` from `.env` (defaults in `.env.example` are **dev-only**: `admin@billinghub.local` / `ChangeMe123!`).
 
@@ -84,7 +89,7 @@ Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` fro
 }
 ```
 
-`details` is optional. Auth-related codes include `INVALID_CREDENTIALS`, `UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_DISABLED`, `EMAIL_ALREADY_EXISTS`, `RATE_LIMITED`, `INVALID_JSON`, `NOT_FOUND`.
+`details` is optional. Auth-related codes include `INVALID_CREDENTIALS`, `UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_DISABLED`, `EMAIL_ALREADY_EXISTS`, `ORGANIZATION_ALREADY_EXISTS`, `ORGANIZATION_REQUIRED`, `RATE_LIMITED`, `INVALID_JSON`, `NOT_FOUND`.
 
 ### Auth env variables
 
@@ -173,3 +178,4 @@ saas-billing-portal/
 - [docs/architecture-notes.md](docs/architecture-notes.md) — fixed stack decisions and planned services
 - [docs/database-schema.md](docs/database-schema.md) — Prisma schema, ER diagram, and key constraints
 - [docs/auth-design.md](docs/auth-design.md) — cookie JWT, roles, and what is not included
+- [docs/organizations.md](docs/organizations.md) — one org per user, OWNER vs MEMBER, and scoping rules

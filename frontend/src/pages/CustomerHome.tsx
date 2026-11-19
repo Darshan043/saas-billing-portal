@@ -7,7 +7,9 @@ export function CustomerHome() {
     <main className="page">
       <h1>Customer area</h1>
       <p>Welcome, {user?.name}.</p>
-      <p className="muted">Organizations and billing will appear here in later steps.</p>
+      {user?.organization && (
+        <p>Organization: {user.organization.name}</p>
+      )}
     </main>
   );
 }
