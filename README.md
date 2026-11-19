@@ -1,8 +1,8 @@
 # BillingHub
 
-BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, organization accounts, and a versioned plan catalogue. Subscriptions and payments are not implemented yet.
+BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, organization accounts, a versioned plan catalogue, and a labelled payment simulator. BillingHub subscription charging is not implemented yet.
 
-The payment provider in this project is a **SIMULATOR**. It is clearly labelled and never moves real money.
+The payment provider in this project is a **SIMULATOR**. It is clearly labelled and never moves real money. Dashboard: http://localhost:4100 . Design notes: [docs/payment-simulator.md](docs/payment-simulator.md).
 
 ## Prerequisites
 
@@ -47,7 +47,7 @@ Then open:
 | Frontend          | http://localhost:5173                    |
 | Backend health    | http://localhost:4000/health             |
 | Simulator health  | http://localhost:4100/health             |
-| Simulator home    | http://localhost:4100                    |
+| Simulator dashboard | http://localhost:4100 (banner: SIMULATOR — no real money) |
 | Mailpit web UI    | http://localhost:8025                    |
 | Postgres          | localhost:5432 (inside Docker: `postgres:5432`) |
 
@@ -143,10 +143,11 @@ docker compose up --build --renew-anon-volumes
 
 Each app has its own `package.json`. There is no workspace root install.
 
-Backend tests use a **separate** Postgres database named `billinghub_test` (`TEST_DATABASE_URL`). They never migrate or truncate `billinghub`. Run them inside Docker so that URL points at the Compose Postgres:
+Backend tests use a **separate** Postgres database named `billinghub_test` (`TEST_DATABASE_URL`). Simulator tests use `billinghub_sim_test`. They never migrate or truncate `billinghub`. Run them inside Docker so that URL points at the Compose Postgres:
 
 ```bash
 docker compose exec backend npm run test
+docker compose exec simulator npm run test
 ```
 
 ```bash
@@ -189,3 +190,4 @@ saas-billing-portal/
 - [docs/auth-design.md](docs/auth-design.md) — cookie JWT, roles, and what is not included
 - [docs/organizations.md](docs/organizations.md) — one org per user, OWNER vs MEMBER, and scoping rules
 - [docs/plan-management.md](docs/plan-management.md) — catalogue, admin plans, and price versioning
+- [docs/payment-simulator.md](docs/payment-simulator.md) — simulator API, test tokens, HMAC webhooks, and dashboard

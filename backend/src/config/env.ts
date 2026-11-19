@@ -6,6 +6,13 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   FRONTEND_ORIGIN: z.string().url().default('http://localhost:5173'),
   SIMULATOR_URL: z.string().url().default('http://simulator:4100'),
+  SIMULATOR_API_KEY: z.string().min(8),
+  SIMULATOR_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(300),
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),
   WEBHOOK_SIGNING_SECRET: z.string().min(1),

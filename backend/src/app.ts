@@ -14,6 +14,7 @@ import {
   adminPlansRouter,
   publicPlansRouter,
 } from './modules/plans/plans.routes';
+import { webhooksRouter } from './modules/webhooks/webhooks.routes';
 import { healthRouter } from './routes/health';
 
 export const app = express();
@@ -27,10 +28,8 @@ app.use(
   }),
 );
 
-// --- Step 7: payment webhook (raw body) ---
-// Register POST /webhooks/payments HERE, before express.json(), so the
-// route can verify the provider signature against the raw request bytes.
-// Do not implement it in this step.
+// Raw-body webhook receiver. Must stay before express.json().
+app.use('/webhooks', webhooksRouter);
 
 app.use(express.json({ limit: '100kb' }));
 app.use(

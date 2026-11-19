@@ -22,7 +22,7 @@ Fixed decisions for this project. Later steps should follow these instead of ren
 | frontend   | Customer / operator UI                            | Step 1        |
 | backend    | HTTP API                                          | Step 1        |
 | worker     | Background jobs (emails, dunning, webhooks)       | Step 8        |
-| simulator  | Labelled payment provider. No real money.         | Step 1        |
+| simulator  | Labelled payment provider. No real money. Own DB `billinghub_sim`, HMAC webhooks, dashboard on :4100. | Step 6 |
 | postgres   | Primary database                                  | Step 1        |
 | mailpit    | Local SMTP catcher and web UI                     | Step 1        |
 
