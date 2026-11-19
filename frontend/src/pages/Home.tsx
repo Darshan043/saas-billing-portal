@@ -54,6 +54,10 @@ export function Home() {
         Subscription billing and customer portal
       </p>
 
+      <p className="home-actions">
+        <Link to="/pricing">View pricing</Link>
+      </p>
+
       {!user && (
         <p className="home-actions">
           <Link to="/login">Login</Link>

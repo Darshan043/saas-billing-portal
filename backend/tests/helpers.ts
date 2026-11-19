@@ -26,6 +26,11 @@ export async function clearTestUsersAndOrgs(): Promise<void> {
   await prisma.organization.deleteMany();
 }
 
+export async function clearTestPlans(): Promise<void> {
+  await prisma.planPrice.deleteMany();
+  await prisma.plan.deleteMany();
+}
+
 type CreateUserOptions = {
   email: string;
   name?: string;
