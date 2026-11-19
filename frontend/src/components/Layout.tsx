@@ -1,0 +1,45 @@
+import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
+
+export function Layout() {
+  const { user, isLoading, logout } = useAuth();
+  const navigate = useNavigate();
+
+  async function onLogout() {
+    await logout();
+    navigate('/');
+  }
+
+  return (
+    <div className="shell">
+      <header className="nav">
+        <Link to="/" className="nav-brand">
+          BillingHub
+        </Link>
+        <nav className="nav-links">
+          {!isLoading && !user && (
+            <>
+              <Link to="/login">Login</Link>
+              <Link to="/register">Register</Link>
+            </>
+          )}
+          {user && (
+            <>
+              <Link to="/app">App</Link>
+              {user.role === 'ADMIN' && <Link to="/admin">Admin</Link>}
+              <span className="nav-user">{user.name}</span>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => void onLogout()}
+              >
+                Logout
+              </button>
+            </>
+          )}
+        </nav>
+      </header>
+      <Outlet />
+    </div>
+  );
+}
