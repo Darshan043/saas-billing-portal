@@ -57,6 +57,36 @@ Use `http://localhost:5173` (not `127.0.0.1`) so the backend CORS allow-list mat
 
 Stop with `Ctrl+C`, or `docker compose down`. Add `-v` only if you also want to delete the Postgres volume.
 
+## Database
+
+Postgres is the `postgres` Compose service. Inside Docker, `DATABASE_URL` uses hostname `postgres` (not `localhost`). Run Prisma commands **inside the backend container**:
+
+```bash
+docker compose exec backend npm run prisma:migrate -- --name init
+docker compose exec backend npm run prisma:deploy
+docker compose exec backend npm run prisma:seed
+docker compose exec backend npm run prisma:reset
+docker compose exec backend npm run prisma:studio
+```
+
+The backend image runs `npx prisma generate` after `npm ci` and again when the container starts (`npx prisma generate && npm run dev`). That keeps the generated client inside the anonymous `node_modules` volume even though source is bind-mounted.
+
+Dev admin credentials come from `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in the root `.env` (copy from `.env.example`). Defaults are **dev-only**: `admin@billinghub.local` / `ChangeMe123!`.
+
+Open a SQL shell:
+
+```bash
+docker compose exec postgres psql -U billing -d billinghub
+```
+
+Schema notes: [docs/database-schema.md](docs/database-schema.md).
+
+If you add backend npm packages and the container still uses an old `node_modules` volume:
+
+```bash
+docker compose up --build --renew-anon-volumes
+```
+
 ## Lint, typecheck, and tests
 
 Each app has its own `package.json`. There is no workspace root install.
@@ -97,3 +127,4 @@ saas-billing-portal/
 
 - [docs/branching.md](docs/branching.md) — branch names, commit prefixes, when to merge
 - [docs/architecture-notes.md](docs/architecture-notes.md) — fixed stack decisions and planned services
+- [docs/database-schema.md](docs/database-schema.md) — Prisma schema, ER diagram, and key constraints
