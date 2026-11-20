@@ -19,6 +19,7 @@ export type WebhookHandler = (ctx: {
   event: WebhookEvent;
   tx: Prisma.TransactionClient;
   logger: Logger;
+  postCommit?: (fn: () => Promise<void>) => void;
 }) => Promise<void>;
 
 export type HandlerLookup = {
@@ -119,6 +120,8 @@ export function createWebhookProcessor(
   }
 
   async function processInsideLock(webhookEventId: string): Promise<void> {
+    const postCommitTasks: (() => Promise<void>)[] = [];
+
     await prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<LockedWebhookRow[]>`
         SELECT id, status
@@ -161,7 +164,12 @@ export function createWebhookProcessor(
         type: event.type,
         attempts: event.attempts,
       });
-      await handler({ event, tx, logger: handlerLogger });
+      await handler({
+        event,
+        tx,
+        logger: handlerLogger,
+        postCommit: (fn) => postCommitTasks.push(fn),
+      });
 
       await tx.webhookEvent.update({
         where: { id: webhookEventId },
@@ -181,6 +189,14 @@ export function createWebhookProcessor(
         'webhook event processed',
       );
     });
+
+    for (const task of postCommitTasks) {
+      try {
+        await task();
+      } catch (err) {
+        log.error({ err, webhookEventId }, 'post-commit task failed');
+      }
+    }
   }
 
   return async function processWebhookEvent(

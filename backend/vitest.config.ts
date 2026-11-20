@@ -8,6 +8,7 @@ export default defineConfig({
     testTimeout: 20000,
     env: {
       NODE_ENV: 'test',
+      ENABLE_EMAIL_DELIVERY: 'true',
       SMTP_HOST: 'localhost',
       SMTP_PORT: '1025',
       WEBHOOK_SIGNING_SECRET: 'dev-only-test-secret',

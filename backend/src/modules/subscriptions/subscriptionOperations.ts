@@ -19,6 +19,10 @@ import {
   ProviderUnavailableError,
   getPaymentGateway,
 } from '../../services/payment/paymentGateway';
+import {
+  dispatchSubscriptionCanceledEmail,
+  dispatchSubscriptionPlanChangedEmail,
+} from '../../services/email/emailDispatcher';
 import { recordAudit } from '../audit/audit.service';
 import {
   assertCanCancel,
@@ -303,7 +307,7 @@ export async function changePlan(
   effectiveAt?: string;
   subscription: SubscriptionView;
 }> {
-  return runSubscriptionOperation(organizationId, 'change-plan', async (tx, locked, markDone) => {
+  const result = await runSubscriptionOperation(organizationId, 'change-plan', async (tx, locked, markDone) => {
     assertCanChangePlan(locked);
     const target = await tx.planPrice.findUnique({
       where: { id: planPriceId },
@@ -419,6 +423,34 @@ export async function changePlan(
       subscription: await loadSubscriptionView(updated),
     };
   });
+
+  try {
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true, billingEmail: true },
+    });
+    if (org?.billingEmail) {
+      await dispatchSubscriptionPlanChangedEmail({
+        organizationId,
+        recipient: org.billingEmail,
+        organizationName: org.name,
+        subscriptionId: result.subscription.id,
+        kind: result.kind,
+        planName: result.subscription.planName,
+        interval: result.subscription.interval,
+        effectiveAt: result.effectiveAt,
+        chargeAmount: result.chargeAmount,
+        currency: result.currency,
+      });
+    }
+  } catch (notifyErr) {
+    logger.error(
+      { err: notifyErr, organizationId },
+      'failed to dispatch plan change notification',
+    );
+  }
+
+  return result;
 }
 
 export async function undoScheduledChange(
@@ -548,7 +580,7 @@ export async function cancelSubscription(
   organizationId: string,
   when: 'IMMEDIATELY' | 'AT_PERIOD_END',
 ): Promise<{ subscription: SubscriptionView }> {
-  return runSubscriptionOperation(organizationId, 'cancel', async (tx, locked, markDone) => {
+  const result = await runSubscriptionOperation(organizationId, 'cancel', async (tx, locked, markDone) => {
     assertCanCancel(locked, when);
     if (when === 'AT_PERIOD_END') {
       await getPaymentGateway().setCancelAtPeriodEnd({
@@ -614,6 +646,34 @@ export async function cancelSubscription(
     });
     return { subscription: await loadSubscriptionView(updated) };
   });
+
+  try {
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true, billingEmail: true },
+    });
+    if (org?.billingEmail) {
+      await dispatchSubscriptionCanceledEmail({
+        organizationId,
+        recipient: org.billingEmail,
+        organizationName: org.name,
+        subscriptionId: result.subscription.id,
+        planName: result.subscription.planName,
+        when,
+        effectiveAt:
+          when === 'AT_PERIOD_END'
+            ? result.subscription.currentPeriodEnd ?? undefined
+            : undefined,
+      });
+    }
+  } catch (notifyErr) {
+    logger.error(
+      { err: notifyErr, organizationId },
+      'failed to dispatch subscription cancellation notification',
+    );
+  }
+
+  return result;
 }
 
 export async function undoCancel(

@@ -179,6 +179,14 @@ Monetary values are stored as integer minor units with a 3-letter currency code 
 | `SUBSCRIPTION_PENDING_TIMEOUT_MINUTES` | Timeout threshold for cancelling abandoned checkout subscriptions (default `15` minutes) |
 | `SIMULATOR_API_KEY` | Shared API token for simulator API authentication |
 | `SIMULATOR_CONTROL_TOKEN` | Bearer token for automated simulator control routes |
+| `ENABLE_EMAIL_DELIVERY` | Toggle transactional email sending (`true`/`false`, default `true`) |
+| `SMTP_HOST` | SMTP server hostname (default `smtp-relay.brevo.com`) |
+| `SMTP_PORT` | SMTP port (default `587` for STARTTLS) |
+| `SMTP_SECURE` | Use SSL/TLS directly (`true`/`false`, default `false` for port 587) |
+| `SMTP_USER` | Brevo SMTP account login email |
+| `SMTP_PASS` | Brevo SMTP key (Standard key generated in Brevo dashboard) |
+| `SMTP_FROM_EMAIL` | Verified sender email address |
+| `SMTP_FROM_NAME` | Sender display name (default `BillingHub`) |
 
 ---
 
@@ -290,6 +298,47 @@ Available scripts across projects:
 - `typecheck`: Run TypeScript compiler type checking (`tsc --noEmit`)
 - `test`: Run Vitest test suite (backend & simulator)
 - `build`: Build production bundles
+
+---
+
+## Render Deployment Guide
+
+BillingHub is configured for production deployment on [Render](https://render.com).
+
+### 1. PostgreSQL Database
+- Create a **PostgreSQL** service in Render (Postgres 16).
+- Use the **Internal Database URL** for services deployed within Render.
+
+### 2. Backend Web Service
+- **Name**: `billinghub-backend`
+- **Environment**: `Node`
+- **Root Directory**: `backend`
+- **Build Command**: `npm install && npx prisma generate && npm run build`
+- **Start Command**: `npm run start` (or `node dist/index.js`)
+- **Health Check Path**: `/health`
+
+### 3. Background Worker Service (pg-boss)
+- **Name**: `billinghub-worker`
+- **Environment**: `Node`
+- **Root Directory**: `backend`
+- **Build Command**: `npm install && npx prisma generate && npm run build`
+- **Start Command**: `npm run worker` (or `node dist/worker.js`)
+
+### 4. Brevo SMTP Configuration in Render
+In both the Web Service and Background Worker environment variable tabs in Render, configure:
+
+```env
+ENABLE_EMAIL_DELIVERY=true
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=<Your Brevo SMTP login email>
+SMTP_PASS=<Your Brevo Standard SMTP key>
+SMTP_FROM_EMAIL=<Your verified sender email in Brevo>
+SMTP_FROM_NAME=BillingHub
+```
+
+*(If you ever need to boot the backend before obtaining Brevo credentials, set `ENABLE_EMAIL_DELIVERY=false` to prevent startup validation errors).*
 
 ---
 

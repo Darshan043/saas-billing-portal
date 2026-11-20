@@ -12,8 +12,14 @@ import { setPaymentGateway } from './services/payment/paymentGateway';
 import { SimulatorPaymentGateway } from './services/payment/simulatorGateway';
 import { recoverStuckWebhookEvents } from './jobs/recovery';
 import {
+  handleEmailDeadLetterJob,
+  handleSendEmailJob,
+} from './jobs/handlers/email';
+import {
   isWebhookJobData,
   PROCESS_WEBHOOK_EVENT,
+  SEND_EMAIL,
+  EMAIL_DEAD_LETTER,
   WEBHOOK_EVENT_RECOVERY,
   WEBHOOK_EVENTS_DEAD_LETTER,
   WEBHOOK_WORKER_COUNT,
@@ -83,6 +89,8 @@ async function main(): Promise<void> {
     { batchSize: 1 },
     handleDeadLetterJobs,
   );
+  await boss.work(SEND_EMAIL, { batchSize: 1 }, handleSendEmailJob);
+  await boss.work(EMAIL_DEAD_LETTER, { batchSize: 1 }, handleEmailDeadLetterJob);
   await boss.work(
     WEBHOOK_EVENT_RECOVERY,
     { batchSize: 1 },
@@ -95,7 +103,9 @@ async function main(): Promise<void> {
       handlers: registry.types(),
       queues: [
         PROCESS_WEBHOOK_EVENT,
+        SEND_EMAIL,
         WEBHOOK_EVENTS_DEAD_LETTER,
+        EMAIL_DEAD_LETTER,
         WEBHOOK_EVENT_RECOVERY,
       ],
       workerCount: WEBHOOK_WORKER_COUNT,

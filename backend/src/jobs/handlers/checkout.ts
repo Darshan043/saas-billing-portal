@@ -6,6 +6,7 @@ import {
   type Subscription,
 } from '@prisma/client';
 import { recordAudit } from '../../modules/audit/audit.service';
+import { dispatchSubscriptionActivatedEmail } from '../../services/email/emailDispatcher';
 import type { WebhookHandler } from '../webhookProcessor';
 import type { HandlerRegistry } from './index';
 import {
@@ -123,6 +124,38 @@ export const handleSubscriptionActivated: WebhookHandler = async (ctx) => {
       currentPeriodEnd: updated.currentPeriodEnd?.toISOString() ?? null,
     },
   });
+
+  const organization = await ctx.tx.organization.findUnique({
+    where: { id: updated.organizationId },
+    select: { name: true, billingEmail: true },
+  });
+  const planPrice = await ctx.tx.planPrice.findUnique({
+    where: { id: updated.planPriceId },
+    include: { plan: true },
+  });
+
+  if (ctx.postCommit && organization?.billingEmail && planPrice) {
+    const orgEmail = organization.billingEmail;
+    const orgName = organization.name;
+    const subId = updated.id;
+    const planName = planPrice.plan.name;
+    const interval = planPrice.interval;
+    const periodStart = updated.currentPeriodStart;
+    const periodEnd = updated.currentPeriodEnd;
+
+    ctx.postCommit(async () => {
+      await dispatchSubscriptionActivatedEmail({
+        organizationId: updated.organizationId,
+        recipient: orgEmail,
+        organizationName: orgName,
+        subscriptionId: subId,
+        planName,
+        interval,
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+      });
+    });
+  }
 };
 
 function failureMessage(data: Record<string, unknown>): string {
