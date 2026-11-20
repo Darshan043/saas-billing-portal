@@ -3,11 +3,15 @@ import { env } from '../config/env';
 import { durationToMs } from './jwt';
 
 function cookieOptions() {
+  // In production we need cross‑site cookies, so use SameSite=None and Secure=true.
+  // In development (or any non‑production NODE_ENV) we keep the previous lax behaviour.
+  const isProd = env.NODE_ENV === 'production';
+  const sameSite: 'none' | 'lax' = isProd ? 'none' : 'lax';
   return {
     httpOnly: true,
-    sameSite: 'lax' as const,
+    sameSite,
     path: '/',
-    secure: env.NODE_ENV === 'production',
+    secure: isProd,
   };
 }
 
