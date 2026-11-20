@@ -121,7 +121,7 @@ Headers:
 - `X-Simulator-Signature` — `v1=<hex>`
 - `Content-Type: application/json`
 
-The backend verifies the signature with `crypto.timingSafeEqual` **before** trusting the JSON. Timestamps must be within `WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS` (default 300). Replay / duplicate deliveries keep the original event id. The receiver stores `providerEventId` uniquely and increments `duplicateCount` instead of processing twice. Step 6 does not create BillingHub invoices or subscriptions from these events.
+The backend verifies the signature with `crypto.timingSafeEqual` **before** trusting the JSON. Timestamps must be within `WEBHOOK_TOLERANCE_SECONDS` (default 300). See [webhooks.md](webhooks.md). Replay / duplicate deliveries keep the original event id. The receiver stores `providerEventId` uniquely and increments `duplicateCount` instead of processing twice. Step 6 does not create BillingHub invoices or subscriptions from these events.
 
 ## Retry policy
 

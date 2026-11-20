@@ -41,4 +41,8 @@ export class AppError extends Error {
   static tooManyRequests(code: string, message: string): AppError {
     return new AppError(429, code, message);
   }
+
+  static payloadTooLarge(code: string, message: string): AppError {
+    return new AppError(413, code, message);
+  }
 }
