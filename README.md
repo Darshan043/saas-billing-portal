@@ -82,7 +82,11 @@ The current organization is **always derived from the logged-in user's membershi
 | PATCH | `/orgs/current` | Cookie + organization + OWNER | Body `{ name?, billingEmail? }` (at least one field). MEMBER is 403 |
 | POST | `/subscriptions` | Cookie + organization OWNER | Body `{ planPriceId, paymentToken }`. Creates a `PENDING` subscription, then calls the simulator. Never sets `ACTIVE` |
 | GET | `/subscriptions/current` | Cookie + organization | Latest subscription view for the current org, or `null`. Polled by the status page |
-| POST | `/webhooks/payments` | HMAC (`X-Simulator-Signature`) | Simulator events only: verify signature on the raw body, store the row, enqueue a background job. `subscription.activated` and first-payment failures are handled; other types remain stubs |
+| GET | `/invoices` | Cookie + organization | Paginated invoices for the current org (`page`, `pageSize` max 50) |
+| GET | `/invoices/:id` | Cookie + organization | Invoice detail with line items and payment. Other org’s id is 404 |
+| GET | `/invoices/:id/pdf` | Cookie + organization | PDF download (`invoice-INV-000001.pdf`). Same 404 rule |
+| GET | `/payments` | Cookie + organization | Paginated payment history, including failed first payments |
+| POST | `/webhooks/payments` | HMAC (`X-Simulator-Signature`) | Simulator events only: verify signature on the raw body, store the row, enqueue a background job. `subscription.activated`, first-payment failures, and `payment.succeeded` (invoice + payment) are handled; other types remain stubs |
 
 Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` from `.env` (defaults in `.env.example` are **dev-only**: `admin@billinghub.local` / `ChangeMe123!`).
 
@@ -117,7 +121,7 @@ Money is stored as integer minor units plus a 3-letter currency (`USD` default; 
 | `WEBHOOK_JOB_RETRY_LIMIT` | pg-boss extra retries for webhook jobs (default `5`) |
 | `SUBSCRIPTION_PENDING_TIMEOUT_MINUTES` | Auto-cancel abandoned `PENDING` checkouts (default `15`) |
 
-Webhook design notes: [docs/webhooks.md](docs/webhooks.md). Background jobs: [docs/background-jobs.md](docs/background-jobs.md). Checkout: [docs/subscriptions-checkout.md](docs/subscriptions-checkout.md). Events are stored, then processed by the worker. First-payment activation uses `subscription.activated`; `payment.succeeded` is still a stub.
+Webhook design notes: [docs/webhooks.md](docs/webhooks.md). Background jobs: [docs/background-jobs.md](docs/background-jobs.md). Checkout: [docs/subscriptions-checkout.md](docs/subscriptions-checkout.md). Invoices: [docs/invoices-payments.md](docs/invoices-payments.md). Events are stored, then processed by the worker. First-payment activation uses `subscription.activated`. `payment.succeeded` creates one PAID invoice and one SUCCEEDED payment for that provider payment id.
 
 ### How to test checkout
 
@@ -130,6 +134,18 @@ The payment provider is the labelled simulator. Use only these tokens (never a c
 | `tok_sim_insufficient_funds` | Same as declined, with "Insufficient funds" |
 
 Browser path: http://localhost:5173/pricing → Choose plan → checkout notice → Subscribe → `/app/subscription/status` (polls every 2 seconds) → success card. Register a **new** customer for real-simulator checks; do not reuse existing production-like accounts.
+
+### How to test invoices
+
+After a successful checkout (`tok_sim_visa_ok`) wait until the subscription is `ACTIVE`, then:
+
+1. Open http://localhost:5173/app/billing/invoices — `INV-000001` should be listed. Open it, then **Download PDF**.
+2. Open http://localhost:5173/app/billing/payments — the SUCCEEDED payment should link to that invoice.
+3. With curl and a cookie jar: `GET /invoices`, `GET /invoices/:id`, `GET /payments`, and `GET /invoices/:id/pdf` (save with `-o`; the file should start with `%PDF`).
+4. In the simulator dashboard, replay/duplicate the `payment.succeeded` event. There is still one invoice and one payment; `webhook_events.duplicate_count` increases; `organizations.next_invoice_number` does not change.
+5. A declined checkout (`tok_sim_declined`) shows a FAILED payment and no invoice.
+
+UI: http://localhost:5173/app/billing/invoices and http://localhost:5173/app/billing/payments . Details: [docs/invoices-payments.md](docs/invoices-payments.md).
 
 ## Database
 
@@ -216,3 +232,4 @@ saas-billing-portal/
 - [docs/webhooks.md](docs/webhooks.md) — signature verification, idempotency, and `POST /webhooks/payments`
 - [docs/background-jobs.md](docs/background-jobs.md) — pg-boss worker, retries, dead letter, and how to add a handler
 - [docs/subscriptions-checkout.md](docs/subscriptions-checkout.md) — checkout flow, activation-only-via-webhook, and endpoints
+- [docs/invoices-payments.md](docs/invoices-payments.md) — invoice creation from `payment.succeeded`, numbering, PDF, and payment history

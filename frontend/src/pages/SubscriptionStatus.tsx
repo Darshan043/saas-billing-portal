@@ -76,6 +76,8 @@ export function SubscriptionStatus() {
             Renews on {formatRenewalDate(subscription.currentPeriodEnd)}
           </p>
           <p>
+            <Link to="/app/billing/invoices">View invoices</Link>
+            {' · '}
             <Link to="/app">Go to app</Link>
           </p>
         </section>

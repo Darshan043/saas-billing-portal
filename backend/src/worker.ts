@@ -5,6 +5,7 @@ import { logger } from './lib/logger';
 import { createBoss, setSendBoss, startBoss, stopBoss } from './jobs/boss';
 import { registry } from './jobs/handlers';
 import { registerCheckoutHandlers } from './jobs/handlers/checkout';
+import { registerInvoiceHandlers } from './jobs/handlers/paymentSucceeded';
 import { registerStubHandlers } from './jobs/handlers/stubs';
 import { setPaymentGateway } from './services/payment/paymentGateway';
 import { SimulatorPaymentGateway } from './services/payment/simulatorGateway';
@@ -22,6 +23,7 @@ import { createWebhookProcessor } from './jobs/webhookProcessor';
 setPaymentGateway(new SimulatorPaymentGateway());
 registerStubHandlers();
 registerCheckoutHandlers(registry);
+registerInvoiceHandlers(registry);
 
 const workerLogger = logger.child({ service: 'worker' });
 const processWebhookEvent = createWebhookProcessor(registry, workerLogger);

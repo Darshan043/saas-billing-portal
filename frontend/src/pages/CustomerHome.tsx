@@ -21,7 +21,14 @@ export function CustomerHome() {
       <h1>Customer area</h1>
       <p>Welcome, {user?.name}.</p>
       {user?.organization && (
-        <p>Organization: {user.organization.name}</p>
+        <>
+          <p>Organization: {user.organization.name}</p>
+          <p>
+            <Link to="/app/billing/invoices">Invoices</Link>
+            {' · '}
+            <Link to="/app/billing/payments">Payments</Link>
+          </p>
+        </>
       )}
 
       {query.isLoading && <p className="muted">Loading plan…</p>}
