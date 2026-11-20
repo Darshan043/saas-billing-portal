@@ -9,7 +9,9 @@ import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { adminRouter } from './modules/admin/admin.routes';
 import { authRouter } from './modules/auth/auth.routes';
+import { invoicesRouter } from './modules/invoices/invoices.routes';
 import { organizationsRouter } from './modules/organizations/organizations.routes';
+import { paymentsRouter } from './modules/payments/payments.routes';
 import {
   adminPlansRouter,
   publicPlansRouter,
@@ -26,6 +28,7 @@ app.use(cookieParser());
 const corsMiddleware = cors({
   origin: env.FRONTEND_ORIGIN,
   credentials: true,
+  exposedHeaders: ['Content-Disposition'],
 });
 app.use((req, res, next) => {
   if (req.path.startsWith('/webhooks')) {
@@ -66,6 +69,8 @@ app.use('/auth', authRouter);
 app.use('/orgs', organizationsRouter);
 app.use('/plans', publicPlansRouter);
 app.use('/subscriptions', subscriptionsRouter);
+app.use('/invoices', invoicesRouter);
+app.use('/payments', paymentsRouter);
 app.use('/admin/plans', adminPlansRouter);
 app.use('/admin', adminRouter);
 

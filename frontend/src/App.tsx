@@ -13,6 +13,9 @@ import { Login } from './pages/Login';
 import { NotFound } from './pages/NotFound';
 import { OrganizationSettings } from './pages/OrganizationSettings';
 import { Checkout } from './pages/Checkout';
+import { InvoiceDetail } from './pages/InvoiceDetail';
+import { Invoices } from './pages/Invoices';
+import { Payments } from './pages/Payments';
 import { Pricing } from './pages/Pricing';
 import { Register } from './pages/Register';
 import { SubscriptionStatus } from './pages/SubscriptionStatus';
@@ -46,6 +49,12 @@ export default function App() {
             path="/app/subscription/status"
             element={<SubscriptionStatus />}
           />
+          <Route path="/app/billing/invoices" element={<Invoices />} />
+          <Route
+            path="/app/billing/invoices/:id"
+            element={<InvoiceDetail />}
+          />
+          <Route path="/app/billing/payments" element={<Payments />} />
           <Route
             path="/app/settings/organization"
             element={<OrganizationSettings />}

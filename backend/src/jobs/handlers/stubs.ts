@@ -30,7 +30,7 @@ export function registerStubHandlers(
 ): void {
   // TODO(Step 9): persist customer / provider customer id from customer.created
   target.register('customer.created', stubHandler('customer.created'));
-  // TODO(Step 9): create Payment and activate the matching subscription
+  // Replaced in paymentSucceeded.ts (Step 10).
   target.register('payment.succeeded', stubHandler('payment.succeeded'));
   // TODO(Step 9): record a failed payment attempt
   target.register('payment.declined', stubHandler('payment.declined'));

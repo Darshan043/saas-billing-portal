@@ -1,18 +1,33 @@
-const MINOR_UNITS_PER_MAJOR = 100;
+function fractionDigits(currency: string): number {
+  try {
+    return (
+      new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency,
+      }).resolvedOptions().maximumFractionDigits ?? 2
+    );
+  } catch {
+    return 2;
+  }
+}
 
 export function formatMoney(amountMinor: number, currency: string): string {
+  const digits = fractionDigits(currency);
+  const factor = 10 ** digits;
   try {
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
       currency,
-    }).format(amountMinor / MINOR_UNITS_PER_MAJOR);
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(amountMinor / factor);
   } catch {
-    return `${currency} ${(amountMinor / MINOR_UNITS_PER_MAJOR).toFixed(2)}`;
+    return `${currency} ${(amountMinor / factor).toFixed(digits)}`;
   }
 }
 
 export function minorToMajorInput(amountMinor: number): string {
-  return (amountMinor / MINOR_UNITS_PER_MAJOR).toFixed(2);
+  return (amountMinor / 100).toFixed(2);
 }
 
 export function parseMajorToMinor(input: string): number | null {
@@ -22,7 +37,7 @@ export function parseMajorToMinor(input: string): number | null {
   }
   const [whole, fraction = ''] = trimmed.split('.');
   const fractionPadded = `${fraction}00`.slice(0, 2);
-  return Number(whole) * MINOR_UNITS_PER_MAJOR + Number(fractionPadded);
+  return Number(whole) * 100 + Number(fractionPadded);
 }
 
 export function yearlySavingsPercent(

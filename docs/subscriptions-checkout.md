@@ -13,6 +13,7 @@ sequenceDiagram
   participant Webhook as POST /webhooks/payments
   participant Queue as pg-boss
   participant Worker
+  participant PayHandler as payment.succeeded handler
   participant Handler as subscription.activated handler
   participant DB as PostgreSQL
 
@@ -27,6 +28,8 @@ sequenceDiagram
   Webhook->>Queue: Enqueue process-webhook-event
   Backend-->>Frontend: 201 subscription still PENDING
   Queue->>Worker: Job { webhookEventId }
+  Worker->>PayHandler: ctx.tx only
+  PayHandler->>DB: PAID invoice + line item + SUCCEEDED payment
   Worker->>Handler: ctx.tx only
   Handler->>DB: PENDING -> ACTIVE + period dates + WEBHOOK audit
   Frontend->>Backend: Poll GET /subscriptions/current
@@ -41,7 +44,7 @@ sequenceDiagram
 | `ACTIVE` | Worker processes `subscription.activated` while the row is still `PENDING` | Never set from the checkout API, from `subscription.created`, or from `payment.succeeded` |
 | `CANCELED` | Provider reject/unavailable at call time, pending timeout, or first-payment `payment.declined` / `payment.insufficient_funds` | Customer can start checkout again |
 
-**Never activate without a processed webhook.** `subscription.created` fires before the first charge. `payment.succeeded` stays a stub until Step 10. A late `subscription.activated` for `CANCELED`, `PAST_DUE`, or `PAUSED` is ignored.
+**Never activate without a processed webhook.** `subscription.created` fires before the first charge. `payment.succeeded` creates the invoice and payment row; it never sets `ACTIVE`. A late `subscription.activated` for `CANCELED`, `PAST_DUE`, or `PAUSED` is ignored.
 
 ## Failed and abandoned checkout
 
@@ -63,5 +66,5 @@ The view is `{ id, status, planName, interval, amount, currency, currentPeriodSt
 
 - Customer: `POST /v1/customers` with `Idempotency-Key: customer-create-<organizationId>`.
 - Subscription: `POST /v1/subscriptions` with BillingHub `planPriceId`, `token`, `interval`, and `metadata: { subscriptionId, organizationId }`. Idempotency key `sub-create-<subscriptionId>` is sent as `Idempotency-Key`.
-- Success token `tok_sim_visa_ok` returns 201 and the simulator then emits `subscription.created`, `payment.succeeded`, invoices, and `subscription.activated` (ISO period dates plus metadata).
+- Success token `tok_sim_visa_ok` returns 201 and the simulator then emits `subscription.created`, `payment.succeeded`, invoices, and `subscription.activated` (ISO period dates plus metadata). BillingHub turns that `payment.succeeded` into one customer invoice and one payment record (see [invoices-payments.md](invoices-payments.md)).
 - Decline tokens still return 201 from the simulator; BillingHub stays `PENDING` until `payment.declined` or `payment.insufficient_funds` is processed.

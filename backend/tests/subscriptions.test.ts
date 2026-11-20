@@ -15,6 +15,10 @@ import {
   handleSubscriptionActivated,
   registerCheckoutHandlers,
 } from '../src/jobs/handlers/checkout';
+import {
+  handlePaymentSucceeded,
+  registerInvoiceHandlers,
+} from '../src/jobs/handlers/paymentSucceeded';
 import { registerStubHandlers } from '../src/jobs/handlers/stubs';
 import { createWebhookProcessor } from '../src/jobs/webhookProcessor';
 import { prisma } from '../src/lib/prisma';
@@ -815,8 +819,9 @@ describe('subscriptions checkout', () => {
     );
   });
 
-  it('checkout handlers replace the stubs; payment.succeeded stays a stub', async () => {
+  it('checkout handlers replace the stubs; payment.succeeded is a real handler', async () => {
     const registry = checkoutRegistry();
+    registerInvoiceHandlers(registry);
     expect(registry.get('subscription.activated')).toBe(
       handleSubscriptionActivated,
     );
@@ -824,10 +829,7 @@ describe('subscriptions checkout', () => {
     expect(registry.get('payment.insufficient_funds')).toBe(
       handlePaymentFailed,
     );
-    expect(registry.get('payment.succeeded')).not.toBe(handlePaymentFailed);
-    expect(registry.get('payment.succeeded')).not.toBe(
-      handleSubscriptionActivated,
-    );
+    expect(registry.get('payment.succeeded')).toBe(handlePaymentSucceeded);
 
     const { organization } = await createTestUser({
       email: email('stub'),
@@ -856,6 +858,7 @@ describe('subscriptions checkout', () => {
       where: { id: pending.id },
     });
     expect(stillPending.status).toBe(SubscriptionStatus.PENDING);
-    expect(await prisma.payment.count()).toBe(0);
+    expect(await prisma.invoice.count()).toBe(1);
+    expect(await prisma.payment.count()).toBe(1);
   });
 });
