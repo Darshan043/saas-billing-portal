@@ -44,6 +44,38 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
       WEBHOOK_TOLERANCE_SECONDS: ${WEBHOOK_TOLERANCE_SECONDS:-300}
+      WEBHOOK_JOB_RETRY_LIMIT: ${WEBHOOK_JOB_RETRY_LIMIT:-5}
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["sh", "-c", "npx prisma generate && npm run worker:dev"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${BACKEND_PORT:-4000}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SIMULATOR_URL: http://simulator:4100
+      SIMULATOR_API_KEY: ${SIMULATOR_API_KEY:-dev-only-simulator-api-key}
+      FRONTEND_ORIGIN: http://localhost:5173
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      COOKIE_NAME: ${COOKIE_NAME:-billing_token}
+      TEST_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billinghub_test
+      CHOKIDAR_USEPOLLING: "true"
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
+      WEBHOOK_TOLERANCE_SECONDS: ${WEBHOOK_TOLERANCE_SECONDS:-300}
+      WEBHOOK_JOB_RETRY_LIMIT: ${WEBHOOK_JOB_RETRY_LIMIT:-5}
     volumes:
       - ./backend:/app
       - /app/node_modules
