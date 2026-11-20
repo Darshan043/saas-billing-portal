@@ -14,6 +14,7 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(300),
+  WEBHOOK_JOB_RETRY_LIMIT: z.coerce.number().int().min(0).default(5),
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),
   SEED_ADMIN_EMAIL: z.string().email().optional(),

@@ -7,6 +7,7 @@ import {
   verifyWebhookSignature,
   type SignatureFailureReason,
 } from '../../lib/webhookSignature';
+import { enqueueWebhookEvent } from '../../jobs/enqueue';
 import { webhookEventSchema } from './webhooks.schemas';
 
 const RAW_BODY_STORE_LIMIT = 10_000;
@@ -157,7 +158,7 @@ export async function receivePaymentWebhook(input: {
 
   try {
     // Idempotency relies on the unique constraint on providerEventId, not find-then-insert.
-    await prisma.webhookEvent.create({
+    const row = await prisma.webhookEvent.create({
       data: {
         providerEventId: event.id,
         type: event.type,
@@ -172,6 +173,7 @@ export async function receivePaymentWebhook(input: {
       { outcome: 'stored', eventId: event.id, type: event.type },
       'webhook received',
     );
+    await enqueueStoredWebhookEvent(row.id);
     return { duplicate: false };
   } catch (err) {
     if (
@@ -179,7 +181,7 @@ export async function receivePaymentWebhook(input: {
       err.code === 'P2002' &&
       isProviderEventIdConflict(err)
     ) {
-      await prisma.webhookEvent.update({
+      const existing = await prisma.webhookEvent.update({
         where: { providerEventId: event.id },
         data: { duplicateCount: { increment: 1 } },
       });
@@ -187,8 +189,22 @@ export async function receivePaymentWebhook(input: {
         { outcome: 'duplicate', eventId: event.id, type: event.type },
         'webhook received',
       );
+      if (existing.status === WebhookEventStatus.RECEIVED) {
+        await enqueueStoredWebhookEvent(existing.id);
+      }
       return { duplicate: true };
     }
     throw err;
+  }
+}
+
+async function enqueueStoredWebhookEvent(webhookEventId: string): Promise<void> {
+  try {
+    await enqueueWebhookEvent(webhookEventId);
+  } catch (err) {
+    logger.error(
+      { err, webhookEventId },
+      'failed to enqueue webhook event',
+    );
   }
 }

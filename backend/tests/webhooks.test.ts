@@ -1,7 +1,8 @@
 import { WebhookEventStatus } from '@prisma/client';
 import request from 'supertest';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { env } from '../src/config/env';
+import { enqueueWebhookEvent } from '../src/jobs/enqueue';
 import { prisma } from '../src/lib/prisma';
 import { computeWebhookSignature } from '../src/lib/webhookSignature';
 import { assertTestDatabase, TEST_DATABASE_NAME } from './dbSafety';
@@ -10,6 +11,10 @@ import {
   createTestUser,
   importApp,
 } from './helpers';
+
+vi.mock('../src/jobs/enqueue', () => ({
+  enqueueWebhookEvent: vi.fn().mockResolvedValue('job-id'),
+}));
 
 async function expectTestDatabase(): Promise<void> {
   assertTestDatabase(process.env.DATABASE_URL);
@@ -46,6 +51,7 @@ describe('payment webhooks', () => {
     await expectTestDatabase();
     await prisma.auditLog.deleteMany();
     await prisma.webhookEvent.deleteMany();
+    vi.mocked(enqueueWebhookEvent).mockClear();
   });
 
   afterAll(async () => {
@@ -74,6 +80,8 @@ describe('payment webhooks', () => {
     expect(stored[0]?.duplicateCount).toBe(0);
     expect(stored[0]?.rawBody).toBeNull();
     expect(stored[0]?.payload).toMatchObject(payload);
+    expect(enqueueWebhookEvent).toHaveBeenCalledTimes(1);
+    expect(enqueueWebhookEvent).toHaveBeenCalledWith(stored[0]?.id);
   });
 
   it('treats the same event sent 5 times as one row with four duplicates', async () => {
@@ -102,6 +110,12 @@ describe('payment webhooks', () => {
     expect(stored).toHaveLength(1);
     expect(stored[0]?.duplicateCount).toBe(4);
     expect(stored[0]?.status).toBe(WebhookEventStatus.RECEIVED);
+    expect(enqueueWebhookEvent).toHaveBeenCalledTimes(5);
+    expect(
+      vi.mocked(enqueueWebhookEvent).mock.calls.every(
+        (call) => call[0] === stored[0]?.id,
+      ),
+    ).toBe(true);
   });
 
   it('counts concurrent duplicate deliveries with the unique constraint', async () => {
@@ -129,6 +143,36 @@ describe('payment webhooks', () => {
     expect(stored).toHaveLength(1);
     expect(stored[0]?.duplicateCount).toBe(9);
     expect(stored[0]?.status).toBe(WebhookEventStatus.RECEIVED);
+    expect(enqueueWebhookEvent).toHaveBeenCalled();
+  });
+
+  it('does not enqueue a duplicate unless the existing row is RECEIVED', async () => {
+    const app = await importApp();
+    const payload = eventPayload();
+    await prisma.webhookEvent.create({
+      data: {
+        providerEventId: payload.id,
+        type: payload.type,
+        payload,
+        signatureValid: true,
+        status: WebhookEventStatus.PROCESSED,
+        processedAt: new Date(),
+      },
+    });
+    const rawBody = JSON.stringify(payload);
+    const { headers } = signedHeaders(rawBody);
+    const res = await request(app)
+      .post('/webhooks/payments')
+      .set(headers)
+      .send(rawBody);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, duplicate: true });
+    expect(enqueueWebhookEvent).not.toHaveBeenCalled();
+    const stored = await prisma.webhookEvent.findMany();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.status).toBe(WebhookEventStatus.PROCESSED);
+    expect(stored[0]?.duplicateCount).toBe(1);
   });
 
   it('rejects a tampered body and does not create a RECEIVED row', async () => {
@@ -159,6 +203,7 @@ describe('payment webhooks', () => {
         where: { providerEventId: payload.id },
       }),
     ).toBe(0);
+    expect(enqueueWebhookEvent).not.toHaveBeenCalled();
   });
 
   it('rejects a missing signature header', async () => {
@@ -175,6 +220,7 @@ describe('payment webhooks', () => {
       .send(rawBody);
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('INVALID_SIGNATURE');
+    expect(enqueueWebhookEvent).not.toHaveBeenCalled();
   });
 
   it('rejects an expired timestamp', async () => {
@@ -247,6 +293,7 @@ describe('payment webhooks', () => {
     expect(rejected).toHaveLength(2);
     expect(rejected.every((row) => row.signatureValid)).toBe(true);
     expect(rejected.every((row) => row.providerEventId === null)).toBe(true);
+    expect(enqueueWebhookEvent).not.toHaveBeenCalled();
   });
 
   it('stores two different events as two rows', async () => {

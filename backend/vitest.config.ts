@@ -14,6 +14,7 @@ export default defineConfig({
       SIMULATOR_URL: 'http://simulator:4100',
       SIMULATOR_API_KEY: 'dev-only-simulator-api-key',
       WEBHOOK_TOLERANCE_SECONDS: '300',
+      WEBHOOK_JOB_RETRY_LIMIT: '5',
       FRONTEND_ORIGIN: 'http://localhost:5173',
       JWT_SECRET: 'dev-only-test-jwt-secret-32chars-min',
       JWT_EXPIRES_IN: '7d',

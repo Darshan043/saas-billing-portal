@@ -1,6 +1,6 @@
 # Webhook receiver
 
-Step 7 receives signed payment-simulator events at `POST /webhooks/payments`, verifies the HMAC, and stores rows in `webhook_events`. Events are **stored only**. Processing (activating subscriptions, invoices, email) starts in Step 8.
+Step 7 receives signed payment-simulator events at `POST /webhooks/payments`, verifies the HMAC, and stores rows in `webhook_events`. Step 8 enqueues stored events on pg-boss; handlers are still stubs. Real business processing starts in Steps 9–12. See [background-jobs.md](background-jobs.md).
 
 The simulator already posts to `http://backend:4000/webhooks/payments` (`BACKEND_WEBHOOK_URL`). Do not change the simulator for this step.
 
@@ -74,10 +74,8 @@ Rejected events store `providerEventId = null` and a `rawBody` truncated to 10,0
 
 ## What this step does not do
 
-- No job queue, pg-boss, or worker
-- No handlers that activate subscriptions, create invoices/payments, or send email
+- No handlers that activate subscriptions, create invoices/payments, or send email (stubs only; see [background-jobs.md](background-jobs.md))
 - No admin UI for events
-- Valid events stay `RECEIVED` until Step 8
 
 ## Signed test request
 

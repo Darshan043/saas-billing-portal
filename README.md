@@ -49,13 +49,14 @@ Then open:
 | Simulator health  | http://localhost:4100/health             |
 | Simulator dashboard | http://localhost:4100 (banner: SIMULATOR — no real money) |
 | Mailpit web UI    | http://localhost:8025                    |
+| Worker            | no published port (logs: `docker compose logs -f worker`) |
 | Postgres          | localhost:5432 (inside Docker: `postgres:5432`) |
 
 If a host port is already in use (common for 5432), change that port in the root `.env` and run Compose again. The backend still talks to Postgres on the internal Docker network, so only the published host port needs to change.
 
 Use `http://localhost:5173` (not `127.0.0.1`) so the backend CORS allow-list matches.
 
-Stop with `Ctrl+C`, or `docker compose down`. Add `-v` only if you also want to delete the Postgres volume.
+Stop with `Ctrl+C`, or `docker compose down` (keeps the Postgres volume). Do **not** use `docker compose down -v` unless you intentionally want to destroy local data. Safe restarts: `docker compose restart worker` or `docker compose up -d --build worker`.
 
 ## Authentication
 
@@ -79,7 +80,7 @@ The current organization is **always derived from the logged-in user's membershi
 | POST | `/orgs` | Cookie | Body `{ name, billingEmail? }`. For customers who have no organization yet. ADMIN is 403. Already a member is 409 |
 | GET | `/orgs/current` | Cookie + organization | Current organization (no `providerCustomerId` / `nextInvoiceNumber`) |
 | PATCH | `/orgs/current` | Cookie + organization + OWNER | Body `{ name?, billingEmail? }` (at least one field). MEMBER is 403 |
-| POST | `/webhooks/payments` | HMAC (`X-Simulator-Signature`) | Simulator events only: verify signature on the raw body, store the row, ignore duplicates. Not processed until a later step |
+| POST | `/webhooks/payments` | HMAC (`X-Simulator-Signature`) | Simulator events only: verify signature on the raw body, store the row, enqueue a background job. Handlers are stubs until Steps 9–12 |
 
 Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` from `.env` (defaults in `.env.example` are **dev-only**: `admin@billinghub.local` / `ChangeMe123!`).
 
@@ -111,8 +112,9 @@ Money is stored as integer minor units plus a 3-letter currency (`USD` default; 
 | `TEST_DATABASE_URL` | Backend tests only; must be database `billinghub_test` |
 | `WEBHOOK_SIGNING_SECRET` | Shared HMAC secret. **Must be identical** for backend and simulator (**dev-only** in `.env.example`) |
 | `WEBHOOK_TOLERANCE_SECONDS` | Allowed clock skew for `X-Simulator-Timestamp` (default `300`) |
+| `WEBHOOK_JOB_RETRY_LIMIT` | pg-boss extra retries for webhook jobs (default `5`) |
 
-Webhook design notes: [docs/webhooks.md](docs/webhooks.md). Events are stored as `RECEIVED` and are not turned into subscriptions or invoices yet.
+Webhook design notes: [docs/webhooks.md](docs/webhooks.md). Background jobs: [docs/background-jobs.md](docs/background-jobs.md). Events are stored, then processed by the worker with stub handlers until Steps 9–12.
 
 ## Database
 
@@ -174,7 +176,7 @@ npm run typecheck
 npm run lint
 ```
 
-Useful scripts in every app: `dev`, `lint`, `lint:fix`, `format`, `typecheck`. Backend and simulator also have `build`, `start`, and `test`. Frontend also has `build` and `preview`.
+Useful scripts in every app: `dev`, `lint`, `lint:fix`, `format`, `typecheck`. Backend and simulator also have `build`, `start`, and `test`. Backend also has `worker:dev` (tsx watch) and `worker` (`node dist/worker.js` after `npm run build`). Frontend also has `build` and `preview`.
 
 ## Folder structure
 
@@ -197,3 +199,4 @@ saas-billing-portal/
 - [docs/plan-management.md](docs/plan-management.md) — catalogue, admin plans, and price versioning
 - [docs/payment-simulator.md](docs/payment-simulator.md) — simulator API, test tokens, HMAC webhooks, and dashboard
 - [docs/webhooks.md](docs/webhooks.md) — signature verification, idempotency, and `POST /webhooks/payments`
+- [docs/background-jobs.md](docs/background-jobs.md) — pg-boss worker, retries, dead letter, and how to add a handler
