@@ -7,6 +7,7 @@ import { registry } from './jobs/handlers';
 import { registerCheckoutHandlers } from './jobs/handlers/checkout';
 import { registerInvoiceHandlers } from './jobs/handlers/paymentSucceeded';
 import { registerStubHandlers } from './jobs/handlers/stubs';
+import { registerSubscriptionChangeHandlers } from './jobs/handlers/subscriptionChanges';
 import { setPaymentGateway } from './services/payment/paymentGateway';
 import { SimulatorPaymentGateway } from './services/payment/simulatorGateway';
 import { recoverStuckWebhookEvents } from './jobs/recovery';
@@ -24,6 +25,7 @@ setPaymentGateway(new SimulatorPaymentGateway());
 registerStubHandlers();
 registerCheckoutHandlers(registry);
 registerInvoiceHandlers(registry);
+registerSubscriptionChangeHandlers(registry);
 
 const workerLogger = logger.child({ service: 'worker' });
 const processWebhookEvent = createWebhookProcessor(registry, workerLogger);

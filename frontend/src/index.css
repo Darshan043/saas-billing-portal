@@ -1,12 +1,12 @@
+@import './styles/tokens.css';
+@import './styles/components.css';
+@import './styles/layout.css';
+
 :root {
-  color: #0f172a;
-  background: #f1f5f9;
-  font-family:
-    system-ui,
-    -apple-system,
-    Segoe UI,
-    sans-serif;
-  line-height: 1.5;
+  color: var(--color-text-primary, #0f172a);
+  background: var(--color-bg, #f1f5f9);
+  font-family: var(--font-family, system-ui, -apple-system, Segoe UI, sans-serif);
+  line-height: var(--line-height-normal, 1.5);
 }
 
 * {
@@ -466,4 +466,48 @@ dd {
 .pill.status-failed {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  align-items: center;
+}
+
+a.primary-button {
+  display: inline-block;
+  text-decoration: none;
+  color: #fff;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(15 23 42 / 45%);
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  z-index: 20;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  max-width: 28rem;
+  width: 100%;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.modal .action-row button,
+.action-row button:not(.primary-button):not(.link-button) {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
 }

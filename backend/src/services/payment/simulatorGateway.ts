@@ -2,11 +2,15 @@ import { env } from '../../config/env';
 import {
   ProviderRejectedError,
   ProviderUnavailableError,
+  type ChangePlanRequest,
+  type ChangePlanResponse,
   type CreateCustomerRequest,
   type CreateCustomerResponse,
   type CreateSubscriptionRequest,
   type CreateSubscriptionResponse,
   type PaymentGateway,
+  type ProviderSubscriptionRequest,
+  type ResumeSubscriptionRequest,
 } from './paymentGateway';
 
 type ErrorBody = {
@@ -57,6 +61,93 @@ export class SimulatorPaymentGateway implements PaymentGateway {
       { 'Idempotency-Key': request.idempotencyKey },
     );
     return body.subscription;
+  }
+
+  async changeSubscriptionPlan(
+    request: ChangePlanRequest,
+  ): Promise<ChangePlanResponse> {
+    const body = await this.request<{
+      subscription: {
+        id: string;
+        status: string;
+        amount: number;
+        currency: string;
+        planPriceId: string | null;
+        currentPeriodEnd?: string | null;
+      };
+    }>(
+      'POST',
+      `/v1/subscriptions/${request.providerSubscriptionId}/change-plan`,
+      {
+        planPriceId: request.planPriceId,
+        amount: request.amount,
+        currency: request.currency,
+        chargeAmount: request.chargeAmount,
+        description: request.description,
+        token: request.token,
+        metadata: request.metadata,
+      },
+      { 'Idempotency-Key': request.idempotencyKey },
+    );
+    return {
+      id: body.subscription.id,
+      status: body.subscription.status,
+      amount: body.subscription.amount,
+      currency: body.subscription.currency,
+      planPriceId: body.subscription.planPriceId,
+      newPeriod: body.subscription.currentPeriodEnd
+        ? { currentPeriodEnd: body.subscription.currentPeriodEnd }
+        : null,
+    };
+  }
+
+  async setCancelAtPeriodEnd(
+    request: ProviderSubscriptionRequest & { value: boolean },
+  ): Promise<void> {
+    await this.request(
+      'POST',
+      `/v1/subscriptions/${request.providerSubscriptionId}/cancel-at-period-end`,
+      { value: request.value },
+      { 'Idempotency-Key': request.idempotencyKey },
+    );
+  }
+
+  async cancelSubscriptionNow(
+    request: ProviderSubscriptionRequest,
+  ): Promise<void> {
+    await this.request(
+      'POST',
+      `/v1/subscriptions/${request.providerSubscriptionId}/cancel`,
+      {},
+      { 'Idempotency-Key': request.idempotencyKey },
+    );
+  }
+
+  async pauseSubscription(
+    request: ProviderSubscriptionRequest,
+  ): Promise<void> {
+    await this.request(
+      'POST',
+      `/v1/subscriptions/${request.providerSubscriptionId}/pause`,
+      {},
+      { 'Idempotency-Key': request.idempotencyKey },
+    );
+  }
+
+  async resumeSubscription(
+    request: ResumeSubscriptionRequest,
+  ): Promise<{ currentPeriodEnd: string | null }> {
+    const body = await this.request<{
+      subscription: { currentPeriodEnd?: string | null };
+    }>(
+      'POST',
+      `/v1/subscriptions/${request.providerSubscriptionId}/resume`,
+      { currentPeriodEnd: request.newPeriodEnd.toISOString() },
+      { 'Idempotency-Key': request.idempotencyKey },
+    );
+    return {
+      currentPeriodEnd: body.subscription.currentPeriodEnd ?? null,
+    };
   }
 
   private async request<T>(

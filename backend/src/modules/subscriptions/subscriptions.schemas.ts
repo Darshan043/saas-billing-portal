@@ -16,3 +16,19 @@ export const createSubscriptionSchema = z.object({
 });
 
 export type CreateSubscriptionInput = z.infer<typeof createSubscriptionSchema>;
+
+export const changePlanSchema = z.object({
+  planPriceId: z.string().uuid(),
+});
+
+export type ChangePlanInput = z.infer<typeof changePlanSchema>;
+
+export const changePreviewQuerySchema = z.object({
+  planPriceId: z.string().uuid(),
+});
+
+export const cancelSubscriptionSchema = z.object({
+  when: z.enum(['IMMEDIATELY', 'AT_PERIOD_END']),
+});
+
+export type CancelSubscriptionInput = z.infer<typeof cancelSubscriptionSchema>;

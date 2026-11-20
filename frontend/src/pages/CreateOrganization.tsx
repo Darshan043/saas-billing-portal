@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useAuth } from '../auth/AuthContext';
+import { Button } from '../components/ui';
+import { BrandLogoIcon } from '../components/layouts/Icons';
 import { ApiError, api } from '../lib/api';
 
 const createOrgSchema = z.object({
@@ -88,40 +90,78 @@ export function CreateOrganization() {
   }
 
   return (
-    <main className="page">
-      <h1>Create your organization</h1>
-      <p className="muted">
-        Billing for subscriptions and invoices will belong to this organization.
-      </p>
-      <form className="form" onSubmit={(event) => void onSubmit(event)}>
-        {serverError && <p className="error">{serverError}</p>}
-        <label>
-          Organization name
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-          {fieldErrors.name && (
-            <span className="field-error">{fieldErrors.name}</span>
-          )}
-        </label>
-        <label>
-          Billing email (optional)
-          <input
-            type="email"
-            autoComplete="email"
-            value={billingEmail}
-            onChange={(event) => setBillingEmail(event.target.value)}
-          />
-          {fieldErrors.billingEmail && (
-            <span className="field-error">{fieldErrors.billingEmail}</span>
-          )}
-        </label>
-        <button type="submit" disabled={submitting}>
-          {submitting ? 'Creating…' : 'Create organization'}
-        </button>
-      </form>
-    </main>
+    <div className="auth-container">
+      <div className="auth-card">
+        <Link to="/" className="auth-brand-wrap" aria-label="BillingHub home">
+          <span className="brand-icon">
+            <BrandLogoIcon style={{ width: '1.25rem', height: '1.25rem' }} />
+          </span>
+          <span style={{ fontWeight: 700, fontSize: '1.2rem', color: 'var(--color-navy-900)' }}>
+            BillingHub
+          </span>
+        </Link>
+
+        <h1 className="auth-title">Setup your organization</h1>
+        <p className="auth-subtitle">
+          Subscriptions, team members, and invoice records belong to your organization
+        </p>
+
+        {serverError && (
+          <div className="callout-banner callout-banner-danger" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+            <span>{serverError}</span>
+          </div>
+        )}
+
+        <form onSubmit={(event) => void onSubmit(event)}>
+          <div className="form-field">
+            <label className="form-field-label" htmlFor="org-create-name">
+              Organization Name
+            </label>
+            <input
+              id="org-create-name"
+              className={`form-control ${fieldErrors.name ? 'error' : ''}`}
+              type="text"
+              placeholder="e.g. Acme Corp"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+            {fieldErrors.name && (
+              <span className="field-error">{fieldErrors.name}</span>
+            )}
+          </div>
+
+          <div className="form-field" style={{ marginTop: 'var(--space-3)' }}>
+            <label className="form-field-label" htmlFor="org-create-email">
+              Billing Email (optional)
+            </label>
+            <input
+              id="org-create-email"
+              className={`form-control ${fieldErrors.billingEmail ? 'error' : ''}`}
+              type="email"
+              autoComplete="email"
+              placeholder="billing@company.com"
+              value={billingEmail}
+              onChange={(event) => setBillingEmail(event.target.value)}
+            />
+            <div className="form-field-helper">
+              Defaults to your account email if left blank.
+            </div>
+            {fieldErrors.billingEmail && (
+              <span className="field-error">{fieldErrors.billingEmail}</span>
+            )}
+          </div>
+
+          <div style={{ marginTop: 'var(--space-5)' }}>
+            <Button
+              type="submit"
+              disabled={submitting}
+              style={{ width: '100%', padding: '0.65rem' }}
+            >
+              {submitting ? 'Creating workspace…' : 'Continue to Dashboard →'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

@@ -60,7 +60,7 @@ sequenceDiagram
 | POST | `/subscriptions` | Cookie + organization OWNER | `{ planPriceId, paymentToken }` | 201 `{ subscription }` still `PENDING` on success |
 | GET | `/subscriptions/current` | Cookie + organization | — | `{ subscription }` or `{ subscription: null }`. Cheap; the status page polls every 2 seconds |
 
-The view is `{ id, status, planName, interval, amount, currency, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd, createdAt, failureReason }`. Provider ids are never returned. `failureReason` is set only for `CANCELED` rows, from the latest `subscription.payment_failed` or `subscription.checkout_canceled` audit snapshot.
+The view is `{ id, status, planName, planId, planPriceId, interval, amount, currency, usageLimit, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd, pausedAt, canceledAt, endedAt, pendingChange, capabilities, createdAt, failureReason }`. Provider ids are never returned. `failureReason` is set only for `CANCELED` rows, from the latest `subscription.payment_failed` or `subscription.checkout_canceled` audit snapshot. Plan changes are documented in [subscription-changes.md](subscription-changes.md). A prorated upgrade charge creates a second invoice through the same `payment.succeeded` path.
 
 ## Simulator integration used here
 

@@ -29,6 +29,7 @@ export function Layout() {
               <Link to="/app">App</Link>
               {user.role === 'CUSTOMER' && user.organization && (
                 <>
+                  <Link to="/app/subscription">Manage subscription</Link>
                   <Link to="/app/billing/invoices">Invoices</Link>
                   <Link to="/app/billing/payments">Payments</Link>
                   <Link to="/app/settings/organization">Organization settings</Link>

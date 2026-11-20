@@ -133,12 +133,28 @@ function formatDay(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
+function metadataDescription(data: PaymentSucceededData): string | null {
+  const meta = data.metadata as Record<string, unknown> | undefined;
+  const fromMeta =
+    typeof meta?.description === 'string' ? meta.description.trim() : '';
+  if (fromMeta) {
+    return fromMeta.slice(0, 200);
+  }
+  return null;
+}
+
 function itemDescription(
   data: PaymentSucceededData,
   subscription: SubscriptionWithPrice | null,
   periodStart: Date,
   periodEnd: Date | null,
 ): string {
+  // Upgrade charges can arrive before the local plan update commits, so
+  // prefer the event description over the subscription's current plan name.
+  const fromEvent = metadataDescription(data);
+  if (fromEvent) {
+    return fromEvent;
+  }
   if (subscription) {
     const interval =
       subscription.planPrice.interval === 'YEAR' ? 'Yearly' : 'Monthly';

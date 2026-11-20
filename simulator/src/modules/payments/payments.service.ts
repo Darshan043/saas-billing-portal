@@ -33,6 +33,10 @@ const TOKEN_OUTCOME: Record<
 export type PaymentMetadata = {
   subscriptionId: string;
   organizationId: string;
+  reason?: string;
+  description?: string;
+  fromPlanPriceId?: string;
+  toPlanPriceId?: string;
 };
 
 export type CreatePaymentInput = {
@@ -43,6 +47,7 @@ export type CreatePaymentInput = {
   paymentMethodId?: string;
   idempotencyKey?: string;
   subscriptionId?: string;
+  description?: string;
   metadata?: PaymentMetadata;
 };
 
@@ -144,8 +149,13 @@ export async function createPayment(input: CreatePaymentInput) {
     if (input.subscriptionId) {
       paymentData.subscriptionId = input.subscriptionId;
     }
+    if (input.description) {
+      paymentData.description = input.description;
+    }
     if (input.metadata) {
-      paymentData.metadata = input.metadata;
+      paymentData.metadata = input.description
+        ? { ...input.metadata, description: input.description }
+        : input.metadata;
     }
 
     await emitEvent(outcome.event, payment.id, paymentData);

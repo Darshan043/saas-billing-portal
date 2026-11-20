@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import {
+  Button,
+  Card,
+  PageHeader,
+  Skeleton,
+} from '../components/ui';
 import { ApiError, api } from '../lib/api';
 import { formatMoney } from '../lib/money';
 import {
@@ -11,6 +17,23 @@ import { priceFor, type PublicPlan } from '../lib/plans';
 import { intervalLabel, type SubscriptionView } from '../lib/subscriptions';
 
 type PlansResponse = { plans: PublicPlan[] };
+
+function CheckIcon() {
+  return (
+    <svg
+      style={{ width: '0.875rem', height: '0.875rem', color: 'var(--color-success-700)', flexShrink: 0 }}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path
+        fillRule="evenodd"
+        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
 
 export function Checkout() {
   const { user } = useAuth();
@@ -95,86 +118,206 @@ export function Checkout() {
   }
 
   return (
-    <main className="page">
-      <h1>Checkout</h1>
-      <p className="subtitle">
-        {user?.organization
-          ? `Organization: ${user.organization.name}`
-          : 'Subscribe to a plan'}
-      </p>
+    <main className="page page-wide">
+      <PageHeader
+        title="Complete your subscription"
+        description={
+          user?.organization
+            ? `Subscribing organization: ${user.organization.name}`
+            : 'Select a simulator payment method to activate your plan'
+        }
+      />
 
-      <p className="simulator-notice" role="note">
-        SIMULATOR — no real money. Use a test payment method.
-      </p>
+      {/* Simulator Mode Callout */}
+      <div className="simulator-notice" role="note" style={{ marginBottom: 'var(--space-6)' }}>
+        SIMULATOR MODE — No real money is required or billed. Use test methods below to simulate outcomes.
+      </div>
 
+      {/* Missing Plan parameter error */}
       {!planPriceId && (
-        <p className="error">
-          No plan selected.{' '}
-          <Link to="/pricing">Choose a plan</Link>
-        </p>
+        <Card>
+          <div className="callout-banner callout-banner-danger" style={{ margin: 0 }}>
+            <div>
+              <strong>No plan selected.</strong> Please choose a plan from the pricing catalogue.
+            </div>
+          </div>
+          <div style={{ marginTop: 'var(--space-4)' }}>
+            <Link to="/pricing">
+              <Button size="sm">Back to Pricing</Button>
+            </Link>
+          </div>
+        </Card>
       )}
-      {loadError && <p className="error">{loadError}</p>}
+
+      {/* Plan loading error */}
+      {loadError && (
+        <div className="callout-banner callout-banner-danger">
+          <span>{loadError}</span>
+        </div>
+      )}
+
+      {/* Invalid plan price id */}
       {plans && planPriceId && !selected && (
-        <p className="error">
-          That plan is not available.{' '}
-          <Link to="/pricing">Back to pricing</Link>
-        </p>
-      )}
-      {!plans && !loadError && <p className="muted">Loading plan…</p>}
-
-      {selected && (
-        <section className="status-box">
-          <h2>{selected.plan.name}</h2>
-          <p className="muted">{selected.plan.description}</p>
-          <p className="plan-price">
-            {formatMoney(selected.price.amount, selected.price.currency)}
-            <span className="muted">
-              {' '}
-              / {intervalLabel(selected.price.interval).toLowerCase()}
-            </span>
-          </p>
-          <ul className="feature-list">
-            {selected.plan.features.map((feature) => (
-              <li key={feature}>{feature}</li>
-            ))}
-          </ul>
-        </section>
+        <Card>
+          <div className="callout-banner callout-banner-danger" style={{ margin: 0 }}>
+            <div>
+              <strong>Selected plan is unavailable.</strong> The requested plan price could not be located.
+            </div>
+          </div>
+          <div style={{ marginTop: 'var(--space-4)' }}>
+            <Link to="/pricing">
+              <Button size="sm">Back to Pricing</Button>
+            </Link>
+          </div>
+        </Card>
       )}
 
+      {/* Skeleton Loading state */}
+      {!plans && !loadError && (
+        <div className="checkout-layout">
+          <Card>
+            <Skeleton width="40%" height="1.5rem" />
+            <Skeleton width="100%" height="3rem" style={{ margin: '1rem 0' }} />
+            <Skeleton width="100%" height="3rem" style={{ marginBottom: '1rem' }} />
+          </Card>
+          <Card>
+            <Skeleton width="60%" height="1.25rem" />
+            <Skeleton width="40%" height="2rem" style={{ margin: '1rem 0' }} />
+          </Card>
+        </div>
+      )}
+
+      {/* Non-Owner alert */}
       {selected && !isOwner && (
-        <p className="muted">
-          Only the organization owner can subscribe. Ask an owner to complete
-          checkout.
-        </p>
+        <div className="callout-banner callout-banner-warning">
+          <span>
+            Only organization owners can initiate or authorize subscriptions. Please contact an organization owner to complete this order.
+          </span>
+        </div>
       )}
 
+      {/* Main Checkout View: Form + Order Summary */}
       {selected && isOwner && (
-        <form className="form form-wide" onSubmit={(event) => void onSubmit(event)}>
-          <fieldset className="token-fieldset">
-            <legend>Test payment method</legend>
-            {SIMULATOR_PAYMENT_METHODS.map((method) => (
-              <label key={method.token} className="radio-row">
-                <input
-                  type="radio"
-                  name="paymentToken"
-                  value={method.token}
-                  checked={token === method.token}
-                  onChange={() => setToken(method.token)}
-                />
-                <span>
-                  <strong>{method.label}</strong>
-                  <span className="muted"> — {method.description}</span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-          {serverError && <p className="error">{serverError}</p>}
-          <button type="submit" disabled={submitting}>
-            {submitting ? 'Subscribing…' : 'Subscribe'}
-          </button>
-          <p>
-            <Link to="/pricing">Back to pricing</Link>
-          </p>
+        <form onSubmit={(event) => void onSubmit(event)}>
+          <div className="checkout-layout">
+            {/* Left Column: Payment Method Selection */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+              <Card>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 var(--space-4)' }}>
+                  Select Test Payment Method
+                </h2>
+
+                <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                  {SIMULATOR_PAYMENT_METHODS.map((method) => {
+                    const isChecked = token === method.token;
+                    return (
+                      <label
+                        key={method.token}
+                        className={`radio-card ${isChecked ? 'active' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentToken"
+                          value={method.token}
+                          checked={isChecked}
+                          onChange={() => setToken(method.token)}
+                        />
+                        <div className="radio-card-body">
+                          <div className="radio-card-title">{method.label}</div>
+                          <div className="radio-card-desc">{method.description}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {serverError && (
+                  <div className="callout-banner callout-banner-danger" style={{ marginTop: 'var(--space-4)' }}>
+                    <span>{serverError}</span>
+                  </div>
+                )}
+
+                <div style={{ marginTop: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                  <Button
+                    type="submit"
+                    size="lg"
+                    disabled={submitting}
+                  >
+                    {submitting
+                      ? 'Processing Simulator Order…'
+                      : `Subscribe · ${formatMoney(selected.price.amount, selected.price.currency)} / ${intervalLabel(selected.price.interval).toLowerCase()}`}
+                  </Button>
+                  <Link to="/pricing" style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
+                    Cancel
+                  </Link>
+                </div>
+              </Card>
+
+              {/* Safe Simulator Notice */}
+              <div
+                style={{
+                  fontSize: 'var(--font-size-xs)',
+                  color: 'var(--color-text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  padding: 'var(--space-2) var(--space-3)',
+                }}
+              >
+                <span>🔒 Simulated Sandbox Environment · Instant Token Validation</span>
+              </div>
+            </div>
+
+            {/* Right Column: Order Summary Card */}
+            <div>
+              <aside className="order-summary-card">
+                <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '0 0 var(--space-4)' }}>
+                  Order Summary
+                </h2>
+
+                <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <strong>{selected.plan.name} Plan</strong>
+                    <span>{formatMoney(selected.price.amount, selected.price.currency)}</span>
+                  </div>
+                  <div className="muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: '0.25rem' }}>
+                    Billed {intervalLabel(selected.price.interval).toLowerCase()}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 'var(--space-4)' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 'var(--space-2)' }}>
+                    Plan Highlights
+                  </div>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 'var(--space-2)' }}>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-size-xs)' }}>
+                      <CheckIcon />
+                      <span>{selected.plan.usageLimit.toLocaleString()} monthly API calls</span>
+                    </li>
+                    {selected.plan.features.map((feature) => (
+                      <li key={feature} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-size-xs)' }}>
+                        <CheckIcon />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="order-summary-line">
+                  <span className="muted">Subtotal</span>
+                  <span>{formatMoney(selected.price.amount, selected.price.currency)}</span>
+                </div>
+                <div className="order-summary-line">
+                  <span className="muted">Taxes (Simulator)</span>
+                  <span>$0.00</span>
+                </div>
+                <div className="order-summary-line total">
+                  <span>Total Due Today</span>
+                  <span>{formatMoney(selected.price.amount, selected.price.currency)}</span>
+                </div>
+              </aside>
+            </div>
+          </div>
         </form>
       )}
     </main>

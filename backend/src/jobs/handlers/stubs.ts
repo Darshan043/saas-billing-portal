@@ -39,7 +39,7 @@ export function registerStubHandlers(
     'payment.insufficient_funds',
     stubHandler('payment.insufficient_funds'),
   );
-  // TODO(Step 11): create/activate the BillingHub subscription
+  // Replaced in checkout.ts (Step 9).
   target.register(
     'subscription.created',
     stubHandler('subscription.created'),
@@ -48,12 +48,11 @@ export function registerStubHandlers(
     'subscription.activated',
     stubHandler('subscription.activated'),
   );
-  // TODO(Step 11): apply provider subscription updates
+  // Replaced in subscriptionChanges.ts (Step 11).
   target.register(
     'subscription.updated',
     stubHandler('subscription.updated'),
   );
-  // TODO(Step 11): cancel the BillingHub subscription
   target.register(
     'subscription.cancelled',
     stubHandler('subscription.cancelled'),

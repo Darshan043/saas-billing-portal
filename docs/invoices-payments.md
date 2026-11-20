@@ -2,7 +2,7 @@
 
 When a verified `payment.succeeded` webhook is processed, BillingHub creates **one invoice** (with one line item) and **one payment** for that provider payment id. Customers can then list invoices, open a detail page, download a PDF, and see payment history — including failed first payments from checkout.
 
-This step does not send email, compute upgrades, retry renewals, refund, tax, or coupons.
+This step does not send email, retry renewals, refund, tax, or coupons. A prorated upgrade charge from Step 11 is also a `payment.succeeded` event; if its metadata includes a `description`, that text is the invoice line item.
 
 ## How an invoice is created
 

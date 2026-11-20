@@ -50,6 +50,46 @@ export type CreateSubscriptionResponse = {
   planPriceId: string | null;
 };
 
+export type SubscriptionMetadata = {
+  subscriptionId: string;
+  organizationId: string;
+  reason?: string;
+  description?: string;
+  fromPlanPriceId?: string;
+  toPlanPriceId?: string;
+};
+
+export type ChangePlanRequest = {
+  providerSubscriptionId: string;
+  planPriceId: string;
+  amount: number;
+  currency: string;
+  chargeAmount: number;
+  idempotencyKey: string;
+  description?: string;
+  token?: string;
+  metadata: SubscriptionMetadata;
+};
+
+export type ChangePlanResponse = {
+  id: string;
+  status: string;
+  amount: number;
+  currency: string;
+  planPriceId: string | null;
+  providerPaymentId?: string | null;
+  newPeriod?: { currentPeriodEnd: string } | null;
+};
+
+export type ProviderSubscriptionRequest = {
+  providerSubscriptionId: string;
+  idempotencyKey: string;
+};
+
+export type ResumeSubscriptionRequest = ProviderSubscriptionRequest & {
+  newPeriodEnd: Date;
+};
+
 export interface PaymentGateway {
   createCustomer(
     request: CreateCustomerRequest,
@@ -57,6 +97,17 @@ export interface PaymentGateway {
   createSubscription(
     request: CreateSubscriptionRequest,
   ): Promise<CreateSubscriptionResponse>;
+  changeSubscriptionPlan(
+    request: ChangePlanRequest,
+  ): Promise<ChangePlanResponse>;
+  setCancelAtPeriodEnd(
+    request: ProviderSubscriptionRequest & { value: boolean },
+  ): Promise<void>;
+  cancelSubscriptionNow(request: ProviderSubscriptionRequest): Promise<void>;
+  pauseSubscription(request: ProviderSubscriptionRequest): Promise<void>;
+  resumeSubscription(request: ResumeSubscriptionRequest): Promise<{
+    currentPeriodEnd: string | null;
+  }>;
 }
 
 let currentGateway: PaymentGateway | null = null;

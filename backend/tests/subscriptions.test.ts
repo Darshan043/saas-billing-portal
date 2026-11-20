@@ -20,6 +20,11 @@ import {
   registerInvoiceHandlers,
 } from '../src/jobs/handlers/paymentSucceeded';
 import { registerStubHandlers } from '../src/jobs/handlers/stubs';
+import {
+  handleSubscriptionCancelled,
+  handleSubscriptionUpdated,
+  registerSubscriptionChangeHandlers,
+} from '../src/jobs/handlers/subscriptionChanges';
 import { createWebhookProcessor } from '../src/jobs/webhookProcessor';
 import { prisma } from '../src/lib/prisma';
 import { setPaymentGateway } from '../src/services/payment/paymentGateway';
@@ -830,6 +835,13 @@ describe('subscriptions checkout', () => {
       handlePaymentFailed,
     );
     expect(registry.get('payment.succeeded')).toBe(handlePaymentSucceeded);
+    registerSubscriptionChangeHandlers(registry);
+    expect(registry.get('subscription.updated')).toBe(
+      handleSubscriptionUpdated,
+    );
+    expect(registry.get('subscription.cancelled')).toBe(
+      handleSubscriptionCancelled,
+    );
 
     const { organization } = await createTestUser({
       email: email('stub'),
