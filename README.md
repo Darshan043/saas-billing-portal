@@ -1,6 +1,6 @@
 # BillingHub
 
-BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, organization accounts, a versioned plan catalogue, and a labelled payment simulator. BillingHub subscription charging is not implemented yet.
+BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, organization accounts, a versioned plan catalogue, a labelled payment simulator, and a webhook receiver that stores signed simulator events. BillingHub subscription charging is not implemented yet.
 
 The payment provider in this project is a **SIMULATOR**. It is clearly labelled and never moves real money. Dashboard: http://localhost:4100 . Design notes: [docs/payment-simulator.md](docs/payment-simulator.md).
 
@@ -79,6 +79,7 @@ The current organization is **always derived from the logged-in user's membershi
 | POST | `/orgs` | Cookie | Body `{ name, billingEmail? }`. For customers who have no organization yet. ADMIN is 403. Already a member is 409 |
 | GET | `/orgs/current` | Cookie + organization | Current organization (no `providerCustomerId` / `nextInvoiceNumber`) |
 | PATCH | `/orgs/current` | Cookie + organization + OWNER | Body `{ name?, billingEmail? }` (at least one field). MEMBER is 403 |
+| POST | `/webhooks/payments` | HMAC (`X-Simulator-Signature`) | Simulator events only: verify signature on the raw body, store the row, ignore duplicates. Not processed until a later step |
 
 Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` from `.env` (defaults in `.env.example` are **dev-only**: `admin@billinghub.local` / `ChangeMe123!`).
 
@@ -94,7 +95,7 @@ Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` fro
 }
 ```
 
-`details` is optional. Auth-related codes include `INVALID_CREDENTIALS`, `UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_DISABLED`, `EMAIL_ALREADY_EXISTS`, `ORGANIZATION_ALREADY_EXISTS`, `ORGANIZATION_REQUIRED`, `PLAN_NAME_EXISTS`, `PLAN_NOT_FOUND`, `RATE_LIMITED`, `INVALID_JSON`, `NOT_FOUND`.
+`details` is optional. Auth-related codes include `INVALID_CREDENTIALS`, `UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_DISABLED`, `EMAIL_ALREADY_EXISTS`, `ORGANIZATION_ALREADY_EXISTS`, `ORGANIZATION_REQUIRED`, `PLAN_NAME_EXISTS`, `PLAN_NOT_FOUND`, `RATE_LIMITED`, `INVALID_JSON`, `NOT_FOUND`. Webhook codes include `INVALID_SIGNATURE`, `INVALID_PAYLOAD`, `PAYLOAD_TOO_LARGE`.
 
 ### Plans and prices
 
@@ -108,6 +109,10 @@ Money is stored as integer minor units plus a 3-letter currency (`USD` default; 
 | `JWT_EXPIRES_IN` | Token lifetime (default `7d`) |
 | `COOKIE_NAME` | Cookie name (default `billing_token`) |
 | `TEST_DATABASE_URL` | Backend tests only; must be database `billinghub_test` |
+| `WEBHOOK_SIGNING_SECRET` | Shared HMAC secret. **Must be identical** for backend and simulator (**dev-only** in `.env.example`) |
+| `WEBHOOK_TOLERANCE_SECONDS` | Allowed clock skew for `X-Simulator-Timestamp` (default `300`) |
+
+Webhook design notes: [docs/webhooks.md](docs/webhooks.md). Events are stored as `RECEIVED` and are not turned into subscriptions or invoices yet.
 
 ## Database
 
@@ -191,3 +196,4 @@ saas-billing-portal/
 - [docs/organizations.md](docs/organizations.md) — one org per user, OWNER vs MEMBER, and scoping rules
 - [docs/plan-management.md](docs/plan-management.md) — catalogue, admin plans, and price versioning
 - [docs/payment-simulator.md](docs/payment-simulator.md) — simulator API, test tokens, HMAC webhooks, and dashboard
+- [docs/webhooks.md](docs/webhooks.md) — signature verification, idempotency, and `POST /webhooks/payments`

@@ -21,14 +21,21 @@ export const app = express();
 
 app.use(helmet());
 app.use(cookieParser());
-app.use(
-  cors({
-    origin: env.FRONTEND_ORIGIN,
-    credentials: true,
-  }),
-);
 
-// Raw-body webhook receiver. Must stay before express.json().
+const corsMiddleware = cors({
+  origin: env.FRONTEND_ORIGIN,
+  credentials: true,
+});
+app.use((req, res, next) => {
+  if (req.path.startsWith('/webhooks')) {
+    next();
+    return;
+  }
+  corsMiddleware(req, res, next);
+});
+
+// Raw-body webhook receiver. Must stay before express.json() so HMAC
+// verification uses the exact request bytes, not re-serialized JSON.
 app.use('/webhooks', webhooksRouter);
 
 app.use(express.json({ limit: '100kb' }));

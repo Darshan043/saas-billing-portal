@@ -8,14 +8,14 @@ const envSchema = z.object({
   SIMULATOR_URL: z.string().url().default('http://simulator:4100'),
   SIMULATOR_API_KEY: z.string().min(8),
   SIMULATOR_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-  WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS: z.coerce
+  WEBHOOK_SIGNING_SECRET: z.string().min(1),
+  WEBHOOK_TOLERANCE_SECONDS: z.coerce
     .number()
     .int()
     .positive()
     .default(300),
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),
-  WEBHOOK_SIGNING_SECRET: z.string().min(1),
   SEED_ADMIN_EMAIL: z.string().email().optional(),
   SEED_ADMIN_PASSWORD: z.string().min(1).optional(),
   JWT_SECRET: z.string().min(32),

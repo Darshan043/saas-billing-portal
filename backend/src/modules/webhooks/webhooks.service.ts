@@ -1,126 +1,193 @@
 import { Prisma, WebhookEventStatus } from '@prisma/client';
 import { env } from '../../config/env';
 import { AppError } from '../../lib/errors';
+import { logger } from '../../lib/logger';
 import { prisma } from '../../lib/prisma';
 import {
-  isTimestampFresh,
-  parseSignatureHeader,
-  signPayload,
-  signaturesMatch,
-} from '../../lib/webhookHmac';
-import { simulatorEventSchema } from './webhooks.schemas';
+  verifyWebhookSignature,
+  type SignatureFailureReason,
+} from '../../lib/webhookSignature';
+import { webhookEventSchema } from './webhooks.schemas';
 
-export type ReceiveResult = {
+const RAW_BODY_STORE_LIMIT = 10_000;
+
+export type ReceiveWebhookResult = {
   duplicate: boolean;
-  eventId: string;
 };
 
-async function persistRejected(rawBody: string, reason: string): Promise<void> {
+function truncateRawBody(rawBody: Buffer): string {
+  return rawBody.toString('utf8').slice(0, RAW_BODY_STORE_LIMIT);
+}
+
+function isProviderEventIdConflict(
+  err: Prisma.PrismaClientKnownRequestError,
+): boolean {
+  const target = err.meta?.target;
+  const values = Array.isArray(target)
+    ? target.map(String)
+    : typeof target === 'string'
+      ? [target]
+      : [];
+  if (values.length === 0) {
+    return false;
+  }
+  return values.every(
+    (value) =>
+      value === 'providerEventId' ||
+      value === 'provider_event_id' ||
+      value.includes('provider_event_id'),
+  );
+}
+
+async function persistRejected(input: {
+  signatureValid: boolean;
+  lastError: string;
+  rawBody: Buffer;
+  type?: string;
+  payload?: Prisma.InputJsonValue;
+}): Promise<void> {
   await prisma.webhookEvent.create({
     data: {
-      type: 'invalid',
-      payload: { reason },
-      rawBody,
-      signatureValid: false,
+      providerEventId: null,
+      type: input.type ?? 'unknown',
+      payload: input.payload ?? {},
+      rawBody: truncateRawBody(input.rawBody),
+      signatureValid: input.signatureValid,
       status: WebhookEventStatus.REJECTED,
-      lastError: reason,
+      lastError: input.lastError,
     },
   });
 }
 
-export async function receiveSimulatorWebhook(input: {
-  rawBody: string;
-  signatureHeader?: string;
-  timestampHeader?: string;
-  eventIdHeader?: string;
+function payloadObjectOrEmpty(value: unknown): Prisma.InputJsonValue {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Prisma.InputJsonValue;
+  }
+  return {};
+}
+
+function typeFromUnknown(value: unknown): string {
+  if (typeof value === 'string' && value.length > 0) {
+    return value;
+  }
+  return 'unknown';
+}
+
+export async function receivePaymentWebhook(input: {
+  rawBody: Buffer;
+  signatureHeader: string | undefined;
+  timestampHeader: string | undefined;
   nowSeconds?: number;
-}): Promise<ReceiveResult> {
-  const rawBody = input.rawBody;
-  const provided = parseSignatureHeader(input.signatureHeader);
-  if (!provided || !input.timestampHeader || !input.eventIdHeader) {
-    await persistRejected(rawBody, 'Missing webhook signature headers');
-    throw AppError.badRequest(
-      'WEBHOOK_HEADERS_REQUIRED',
-      'X-Simulator-Signature, X-Simulator-Timestamp, and X-Simulator-Event-Id are required',
-    );
-  }
-
-  const expected = signPayload(
-    env.WEBHOOK_SIGNING_SECRET,
-    input.timestampHeader,
-    rawBody,
-  );
-  if (!signaturesMatch(expected, provided)) {
-    await persistRejected(rawBody, 'Invalid HMAC signature');
-    throw AppError.unauthorized(
-      'WEBHOOK_SIGNATURE_INVALID',
-      'Invalid webhook signature',
-    );
-  }
-
+}): Promise<ReceiveWebhookResult> {
   const nowSeconds = input.nowSeconds ?? Math.floor(Date.now() / 1000);
-  if (
-    !isTimestampFresh(
-      input.timestampHeader,
-      nowSeconds,
-      env.WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS,
-    )
-  ) {
-    await persistRejected(rawBody, 'Expired webhook timestamp');
+  const verified = verifyWebhookSignature({
+    secret: env.WEBHOOK_SIGNING_SECRET,
+    signatureHeader: input.signatureHeader,
+    timestampHeader: input.timestampHeader,
+    rawBody: input.rawBody,
+    nowSeconds,
+    toleranceSeconds: env.WEBHOOK_TOLERANCE_SECONDS,
+  });
+
+  if (!verified.valid) {
+    const reason: SignatureFailureReason = verified.reason;
+    await persistRejected({
+      signatureValid: false,
+      lastError: reason,
+      rawBody: input.rawBody,
+    });
+    logger.info(
+      { outcome: 'rejected', reason },
+      'webhook received',
+    );
     throw AppError.badRequest(
-      'WEBHOOK_TIMESTAMP_EXPIRED',
-      'Webhook timestamp is outside the allowed window',
+      'INVALID_SIGNATURE',
+      'Webhook signature verification failed',
     );
   }
 
   let parsedJson: unknown;
   try {
-    parsedJson = JSON.parse(rawBody);
+    parsedJson = JSON.parse(input.rawBody.toString('utf8'));
   } catch {
-    await persistRejected(rawBody, 'Invalid JSON body');
-    throw AppError.badRequest('INVALID_JSON', 'Malformed JSON body');
+    await persistRejected({
+      signatureValid: true,
+      lastError: 'INVALID_JSON',
+      rawBody: input.rawBody,
+    });
+    logger.info(
+      { outcome: 'rejected', reason: 'INVALID_JSON' },
+      'webhook received',
+    );
+    throw AppError.badRequest(
+      'INVALID_PAYLOAD',
+      'Webhook payload is invalid',
+    );
   }
 
-  const parsed = simulatorEventSchema.safeParse(parsedJson);
+  const parsed = webhookEventSchema.safeParse(parsedJson);
   if (!parsed.success) {
-    await persistRejected(rawBody, 'Invalid event structure');
+    const record =
+      parsedJson && typeof parsedJson === 'object'
+        ? (parsedJson as Record<string, unknown>)
+        : undefined;
+    await persistRejected({
+      signatureValid: true,
+      lastError: 'INVALID_PAYLOAD',
+      rawBody: input.rawBody,
+      type: typeFromUnknown(record?.type),
+      payload: payloadObjectOrEmpty(parsedJson),
+    });
+    logger.info(
+      {
+        outcome: 'rejected',
+        reason: 'INVALID_PAYLOAD',
+        eventId: typeof record?.id === 'string' ? record.id : undefined,
+        type: typeFromUnknown(record?.type),
+      },
+      'webhook received',
+    );
     throw AppError.badRequest(
-      'WEBHOOK_EVENT_INVALID',
-      'Webhook event structure is invalid',
+      'INVALID_PAYLOAD',
+      'Webhook payload is invalid',
     );
   }
 
-  if (parsed.data.id !== input.eventIdHeader) {
-    await persistRejected(rawBody, 'Event id header mismatch');
-    throw AppError.badRequest(
-      'WEBHOOK_EVENT_ID_MISMATCH',
-      'Event id header does not match payload id',
-    );
-  }
+  const event = parsed.data;
 
   try {
-    const created = await prisma.webhookEvent.create({
+    // Idempotency relies on the unique constraint on providerEventId, not find-then-insert.
+    await prisma.webhookEvent.create({
       data: {
-        providerEventId: parsed.data.id,
-        type: parsed.data.type,
-        payload: parsed.data as unknown as Prisma.InputJsonValue,
-        rawBody,
+        providerEventId: event.id,
+        type: event.type,
+        payload: event as unknown as Prisma.InputJsonValue,
+        rawBody: null,
         signatureValid: true,
-        status: WebhookEventStatus.PROCESSED,
-        processedAt: new Date(),
+        status: WebhookEventStatus.RECEIVED,
+        duplicateCount: 0,
       },
     });
-    return { duplicate: false, eventId: created.id };
+    logger.info(
+      { outcome: 'stored', eventId: event.id, type: event.type },
+      'webhook received',
+    );
+    return { duplicate: false };
   } catch (err) {
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === 'P2002'
+      err.code === 'P2002' &&
+      isProviderEventIdConflict(err)
     ) {
-      const existing = await prisma.webhookEvent.update({
-        where: { providerEventId: parsed.data.id },
+      await prisma.webhookEvent.update({
+        where: { providerEventId: event.id },
         data: { duplicateCount: { increment: 1 } },
       });
-      return { duplicate: true, eventId: existing.id };
+      logger.info(
+        { outcome: 'duplicate', eventId: event.id, type: event.type },
+        'webhook received',
+      );
+      return { duplicate: true };
     }
     throw err;
   }

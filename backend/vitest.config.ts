@@ -13,7 +13,7 @@ export default defineConfig({
       WEBHOOK_SIGNING_SECRET: 'dev-only-test-secret',
       SIMULATOR_URL: 'http://simulator:4100',
       SIMULATOR_API_KEY: 'dev-only-simulator-api-key',
-      WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS: '300',
+      WEBHOOK_TOLERANCE_SECONDS: '300',
       FRONTEND_ORIGIN: 'http://localhost:5173',
       JWT_SECRET: 'dev-only-test-jwt-secret-32chars-min',
       JWT_EXPIRES_IN: '7d',

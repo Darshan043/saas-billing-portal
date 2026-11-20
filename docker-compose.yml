@@ -42,6 +42,8 @@ services:
       COOKIE_NAME: ${COOKIE_NAME:-billing_token}
       TEST_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billinghub_test
       CHOKIDAR_USEPOLLING: "true"
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
+      WEBHOOK_TOLERANCE_SECONDS: ${WEBHOOK_TOLERANCE_SECONDS:-300}
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -90,3 +92,5 @@ services:
 
 volumes:
   postgres_data:
+    external: true
+    name: saas-billing-portal_postgres_data
