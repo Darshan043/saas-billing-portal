@@ -7,6 +7,10 @@ import {
 } from '@prisma/client';
 import { z } from 'zod';
 import { allocateInvoiceNumber } from '../../lib/invoiceNumber';
+import {
+  dispatchInvoiceNotificationEmail,
+  dispatchPaymentSucceededEmail,
+} from '../../services/email/emailDispatcher';
 import type { WebhookHandler } from '../webhookProcessor';
 import type { HandlerRegistry } from './index';
 import { asRecord, parseIsoDate } from './payload';
@@ -265,15 +269,57 @@ export const handlePaymentSucceeded: WebhookHandler = async (ctx) => {
       where: { id: existing.id },
       data: paymentFields,
     });
-    return;
+  } else {
+    await ctx.tx.payment.create({
+      data: {
+        ...paymentFields,
+        providerPaymentId: data.paymentId,
+      },
+    });
   }
 
-  await ctx.tx.payment.create({
-    data: {
-      ...paymentFields,
-      providerPaymentId: data.paymentId,
-    },
+  const organization = await ctx.tx.organization.findUnique({
+    where: { id: organizationId },
+    select: { name: true, billingEmail: true },
   });
+
+  if (ctx.postCommit && organization?.billingEmail) {
+    const orgEmail = organization.billingEmail;
+    const orgName = organization.name;
+    const invId = invoice.id;
+    const invNum = invoice.number;
+    const pmtId = data.paymentId;
+    const pmtAmt = data.amount;
+    const pmtCurr = currency;
+    const pmtMethod = data.paymentMethodLabel;
+
+    ctx.postCommit(async () => {
+      await dispatchPaymentSucceededEmail({
+        organizationId,
+        recipient: orgEmail,
+        organizationName: orgName,
+        paymentId: pmtId,
+        invoiceNumber: invNum,
+        amount: pmtAmt,
+        currency: pmtCurr,
+        paymentMethodLabel: pmtMethod,
+        paidAt: issuedAt,
+      });
+
+      await dispatchInvoiceNotificationEmail({
+        organizationId,
+        recipient: orgEmail,
+        organizationName: orgName,
+        invoiceId: invId,
+        invoiceNumber: invNum,
+        total: pmtAmt,
+        currency: pmtCurr,
+        status: 'PAID',
+        periodStart,
+        periodEnd,
+      });
+    });
+  }
 };
 
 export function registerInvoiceHandlers(target: HandlerRegistry): void {

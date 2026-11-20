@@ -6,6 +6,7 @@ import { logger } from './lib/logger';
 import { prisma } from './lib/prisma';
 import { setPaymentGateway } from './services/payment/paymentGateway';
 import { SimulatorPaymentGateway } from './services/payment/simulatorGateway';
+import { emailService } from './services/email/emailService';
 
 setPaymentGateway(new SimulatorPaymentGateway());
 
@@ -13,6 +14,8 @@ async function main(): Promise<void> {
   const boss = createBoss({ mode: 'send-only' });
   await startBoss(boss);
   setSendBoss(boss);
+
+  void emailService.verifyConnection();
 
   const server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT }, 'backend listening');

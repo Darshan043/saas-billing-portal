@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import { recordAudit } from '../../modules/audit/audit.service';
 import { assertTransition } from '../../modules/subscriptions/subscriptionRules';
+import { dispatchSubscriptionCanceledEmail } from '../../services/email/emailDispatcher';
 import type { WebhookHandler } from '../webhookProcessor';
 import type { HandlerRegistry } from './index';
 import {
@@ -151,6 +152,33 @@ export const handleSubscriptionCancelled: WebhookHandler = async (ctx) => {
       endedAt: updated.endedAt?.toISOString() ?? null,
     },
   });
+
+  const organization = await ctx.tx.organization.findUnique({
+    where: { id: updated.organizationId },
+    select: { name: true, billingEmail: true },
+  });
+  const planPrice = await ctx.tx.planPrice.findUnique({
+    where: { id: updated.planPriceId },
+    include: { plan: true },
+  });
+
+  if (ctx.postCommit && organization?.billingEmail && planPrice) {
+    const orgEmail = organization.billingEmail;
+    const orgName = organization.name;
+    const subId = updated.id;
+    const planName = planPrice.plan.name;
+
+    ctx.postCommit(async () => {
+      await dispatchSubscriptionCanceledEmail({
+        organizationId: updated.organizationId,
+        recipient: orgEmail,
+        organizationName: orgName,
+        subscriptionId: subId,
+        planName,
+        when: 'IMMEDIATELY',
+      });
+    });
+  }
 };
 
 export function registerSubscriptionChangeHandlers(
