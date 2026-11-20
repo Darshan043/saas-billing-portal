@@ -77,11 +77,25 @@ Amounts are integer minor units (`2599` = 25.99). Currencies: `USD`, `INR`, `EUR
 
 Optional `idempotencyKey` (body or `Idempotency-Key` header) returns the original payment when reused with the same customer, amount, and currency.
 
+`POST /v1/customers` accepts the same `Idempotency-Key` header (body `idempotencyKey` is a fallback). Reusing `customer-create-<organizationId>` with the same email and name returns the original customer and does not emit a second `customer.created`. A reused key with different details returns `409 IDEMPOTENCY_KEY_REUSED`.
+
 ## Payment and subscription behaviour
 
 Creating a payment always records a simulator invoice and emits webhook events. A successful token marks the invoice `PAID`; declined / insufficient-funds tokens mark it `VOID`.
 
-Simulated subscriptions are independent of BillingHub `subscriptions`. Create / update / cancel only change simulator rows and events. A payment success in the simulator does **not** activate a BillingHub subscription.
+`POST /v1/subscriptions` accepts optional `interval` (`MONTH` default, or `YEAR`) and optional `metadata: { subscriptionId, organizationId }` (BillingHub local ids). Metadata is stored on the simulator subscription and echoed on related webhooks. It is not stuffed into `planPriceId`.
+
+Event order for a token charge:
+
+1. `subscription.created` (immediately, even if the token will fail)
+2. payment + invoice events from the first charge
+3. `subscription.activated` **only** after `tok_sim_visa_ok`
+
+Declined / insufficient-funds tokens still return HTTP 201. They do **not** emit `subscription.activated`. Their `payment.declined` / `payment.insufficient_funds` payloads include `subscriptionId` (simulator) and `metadata` when it was sent on create.
+
+`subscription.activated` `data` includes ISO `currentPeriodStart` / `currentPeriodEnd` (`MONTH` = +1 month, `YEAR` = +1 year). BillingHub must activate from this event, never from `subscription.created` and never from the checkout HTTP response.
+
+Simulated subscriptions are independent of BillingHub `subscriptions`. Create / update / cancel only change simulator rows and events.
 
 ## Webhook event structure
 
@@ -104,6 +118,7 @@ Supported `type` values:
 - `payment.declined`
 - `payment.insufficient_funds`
 - `subscription.created`
+- `subscription.activated`
 - `subscription.updated`
 - `subscription.cancelled`
 - `invoice.created`

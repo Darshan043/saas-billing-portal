@@ -16,6 +16,7 @@ export const EVENT_TYPES = [
   'payment.declined',
   'payment.insufficient_funds',
   'subscription.created',
+  'subscription.activated',
   'subscription.updated',
   'subscription.cancelled',
   'invoice.created',

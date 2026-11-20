@@ -1,6 +1,6 @@
 # BillingHub
 
-BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, organization accounts, a versioned plan catalogue, a labelled payment simulator, and a webhook receiver that stores signed simulator events. BillingHub subscription charging is not implemented yet.
+BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, organization accounts, a versioned plan catalogue, a labelled payment simulator, a webhook receiver that stores signed simulator events, a pg-boss worker, and first-time subscription checkout. A BillingHub subscription becomes **ACTIVE only after** the worker processes a verified `subscription.activated` webhook.
 
 The payment provider in this project is a **SIMULATOR**. It is clearly labelled and never moves real money. Dashboard: http://localhost:4100 . Design notes: [docs/payment-simulator.md](docs/payment-simulator.md).
 
@@ -80,7 +80,9 @@ The current organization is **always derived from the logged-in user's membershi
 | POST | `/orgs` | Cookie | Body `{ name, billingEmail? }`. For customers who have no organization yet. ADMIN is 403. Already a member is 409 |
 | GET | `/orgs/current` | Cookie + organization | Current organization (no `providerCustomerId` / `nextInvoiceNumber`) |
 | PATCH | `/orgs/current` | Cookie + organization + OWNER | Body `{ name?, billingEmail? }` (at least one field). MEMBER is 403 |
-| POST | `/webhooks/payments` | HMAC (`X-Simulator-Signature`) | Simulator events only: verify signature on the raw body, store the row, enqueue a background job. Handlers are stubs until Steps 9–12 |
+| POST | `/subscriptions` | Cookie + organization OWNER | Body `{ planPriceId, paymentToken }`. Creates a `PENDING` subscription, then calls the simulator. Never sets `ACTIVE` |
+| GET | `/subscriptions/current` | Cookie + organization | Latest subscription view for the current org, or `null`. Polled by the status page |
+| POST | `/webhooks/payments` | HMAC (`X-Simulator-Signature`) | Simulator events only: verify signature on the raw body, store the row, enqueue a background job. `subscription.activated` and first-payment failures are handled; other types remain stubs |
 
 Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` from `.env` (defaults in `.env.example` are **dev-only**: `admin@billinghub.local` / `ChangeMe123!`).
 
@@ -113,8 +115,21 @@ Money is stored as integer minor units plus a 3-letter currency (`USD` default; 
 | `WEBHOOK_SIGNING_SECRET` | Shared HMAC secret. **Must be identical** for backend and simulator (**dev-only** in `.env.example`) |
 | `WEBHOOK_TOLERANCE_SECONDS` | Allowed clock skew for `X-Simulator-Timestamp` (default `300`) |
 | `WEBHOOK_JOB_RETRY_LIMIT` | pg-boss extra retries for webhook jobs (default `5`) |
+| `SUBSCRIPTION_PENDING_TIMEOUT_MINUTES` | Auto-cancel abandoned `PENDING` checkouts (default `15`) |
 
-Webhook design notes: [docs/webhooks.md](docs/webhooks.md). Background jobs: [docs/background-jobs.md](docs/background-jobs.md). Events are stored, then processed by the worker with stub handlers until Steps 9–12.
+Webhook design notes: [docs/webhooks.md](docs/webhooks.md). Background jobs: [docs/background-jobs.md](docs/background-jobs.md). Checkout: [docs/subscriptions-checkout.md](docs/subscriptions-checkout.md). Events are stored, then processed by the worker. First-payment activation uses `subscription.activated`; `payment.succeeded` is still a stub.
+
+### How to test checkout
+
+The payment provider is the labelled simulator. Use only these tokens (never a card number):
+
+| Token | Expected BillingHub outcome |
+| --- | --- |
+| `tok_sim_visa_ok` | `POST /subscriptions` returns `PENDING`. After the worker processes `subscription.activated`, `GET /subscriptions/current` is `ACTIVE` with period dates |
+| `tok_sim_declined` | Checkout stays `PENDING` until `payment.declined` is processed, then `CANCELED` with `failureReason` "Card declined". Retry with the success token |
+| `tok_sim_insufficient_funds` | Same as declined, with "Insufficient funds" |
+
+Browser path: http://localhost:5173/pricing → Choose plan → checkout notice → Subscribe → `/app/subscription/status` (polls every 2 seconds) → success card. Register a **new** customer for real-simulator checks; do not reuse existing production-like accounts.
 
 ## Database
 
@@ -200,3 +215,4 @@ saas-billing-portal/
 - [docs/payment-simulator.md](docs/payment-simulator.md) — simulator API, test tokens, HMAC webhooks, and dashboard
 - [docs/webhooks.md](docs/webhooks.md) — signature verification, idempotency, and `POST /webhooks/payments`
 - [docs/background-jobs.md](docs/background-jobs.md) — pg-boss worker, retries, dead letter, and how to add a handler
+- [docs/subscriptions-checkout.md](docs/subscriptions-checkout.md) — checkout flow, activation-only-via-webhook, and endpoints

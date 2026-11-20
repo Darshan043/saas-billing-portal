@@ -7,6 +7,13 @@ export const createSubscriptionSchema = z.object({
   currency: currencySchema,
   planPriceId: z.string().trim().min(1).max(100).optional(),
   token: z.string().trim().min(1).max(64).optional(),
+  interval: z.enum(['MONTH', 'YEAR']).optional(),
+  metadata: z
+    .object({
+      subscriptionId: z.string().uuid(),
+      organizationId: z.string().uuid(),
+    })
+    .optional(),
 });
 
 export const updateSubscriptionSchema = z

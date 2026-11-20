@@ -4,6 +4,10 @@ import { createBoss, setSendBoss, startBoss, stopBoss } from './jobs/boss';
 import { pool } from './lib/db';
 import { logger } from './lib/logger';
 import { prisma } from './lib/prisma';
+import { setPaymentGateway } from './services/payment/paymentGateway';
+import { SimulatorPaymentGateway } from './services/payment/simulatorGateway';
+
+setPaymentGateway(new SimulatorPaymentGateway());
 
 async function main(): Promise<void> {
   const boss = createBoss({ mode: 'send-only' });

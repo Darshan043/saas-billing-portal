@@ -30,6 +30,11 @@ const TOKEN_OUTCOME: Record<
   },
 };
 
+export type PaymentMetadata = {
+  subscriptionId: string;
+  organizationId: string;
+};
+
 export type CreatePaymentInput = {
   customerId: string;
   amount: number;
@@ -37,6 +42,8 @@ export type CreatePaymentInput = {
   token?: string;
   paymentMethodId?: string;
   idempotencyKey?: string;
+  subscriptionId?: string;
+  metadata?: PaymentMetadata;
 };
 
 async function resolveTokenKind(input: CreatePaymentInput): Promise<{
@@ -126,7 +133,7 @@ export async function createPayment(input: CreatePaymentInput) {
       },
     });
 
-    const paymentData = {
+    const paymentData: Record<string, unknown> = {
       paymentId: payment.id,
       customerId: payment.customerId,
       amount: payment.amount,
@@ -134,6 +141,12 @@ export async function createPayment(input: CreatePaymentInput) {
       status: outcome.event.replace('payment.', ''),
       errorCode: payment.errorCode,
     };
+    if (input.subscriptionId) {
+      paymentData.subscriptionId = input.subscriptionId;
+    }
+    if (input.metadata) {
+      paymentData.metadata = input.metadata;
+    }
 
     await emitEvent(outcome.event, payment.id, paymentData);
     await emitEvent('invoice.created', invoice.id, {

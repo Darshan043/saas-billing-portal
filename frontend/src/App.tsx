@@ -12,8 +12,10 @@ import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { NotFound } from './pages/NotFound';
 import { OrganizationSettings } from './pages/OrganizationSettings';
+import { Checkout } from './pages/Checkout';
 import { Pricing } from './pages/Pricing';
 import { Register } from './pages/Register';
+import { SubscriptionStatus } from './pages/SubscriptionStatus';
 
 export default function App() {
   return (
@@ -39,6 +41,11 @@ export default function App() {
           }
         >
           <Route path="/app" element={<CustomerHome />} />
+          <Route path="/app/checkout" element={<Checkout />} />
+          <Route
+            path="/app/subscription/status"
+            element={<SubscriptionStatus />}
+          />
           <Route
             path="/app/settings/organization"
             element={<OrganizationSettings />}

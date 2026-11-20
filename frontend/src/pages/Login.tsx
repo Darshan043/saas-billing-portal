@@ -106,7 +106,10 @@ export function Login() {
         </button>
       </form>
       <p className="muted">
-        No account? <Link to="/register">Register</Link>
+        No account?{' '}
+        <Link to="/register" state={from ? { from } : undefined}>
+          Register
+        </Link>
       </p>
     </main>
   );

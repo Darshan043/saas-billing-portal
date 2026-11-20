@@ -38,6 +38,10 @@ export class AppError extends Error {
     return new AppError(409, code, message);
   }
 
+  static paymentRequired(code: string, message: string): AppError {
+    return new AppError(402, code, message);
+  }
+
   static tooManyRequests(code: string, message: string): AppError {
     return new AppError(429, code, message);
   }

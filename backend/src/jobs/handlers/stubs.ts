@@ -8,6 +8,7 @@ export const SIMULATOR_EVENT_TYPES = [
   'payment.declined',
   'payment.insufficient_funds',
   'subscription.created',
+  'subscription.activated',
   'subscription.updated',
   'subscription.cancelled',
   'invoice.created',
@@ -42,6 +43,10 @@ export function registerStubHandlers(
   target.register(
     'subscription.created',
     stubHandler('subscription.created'),
+  );
+  target.register(
+    'subscription.activated',
+    stubHandler('subscription.activated'),
   );
   // TODO(Step 11): apply provider subscription updates
   target.register(
