@@ -3,8 +3,17 @@ import { AuditSource, Prisma } from '@prisma/client';
 export type AuditSnapshot = {
   status?: string;
   planPriceId?: string;
+  planName?: string;
+  pendingPlanPriceId?: string | null;
   currentPeriodStart?: string | null;
   currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd?: boolean;
+  pausedAt?: string | null;
+  canceledAt?: string | null;
+  endedAt?: string | null;
+  chargeAmount?: number;
+  currency?: string;
+  effectiveAt?: string | null;
   reason?: string;
 };
 

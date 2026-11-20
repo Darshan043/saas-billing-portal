@@ -27,3 +27,5 @@ Fixed decisions for this project. Later steps should follow these instead of ren
 | mailpit    | Local SMTP catcher and web UI                     | Step 1        |
 
 The payment provider is a simulator. It must stay clearly labelled so nobody treats it as a live gateway.
+
+Step 11 added simulator lifecycle routes (`change-plan`, `cancel-at-period-end`, `pause`, `resume`) without renaming `subscription.cancelled`. See [payment-simulator.md](payment-simulator.md).

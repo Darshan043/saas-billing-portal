@@ -16,6 +16,7 @@ enum PaymentStatus {
 
 enum SubscriptionStatus {
   ACTIVE
+  PAUSED
   CANCELED
 }
 
@@ -107,24 +108,41 @@ model Payment {
 }
 
 model Subscription {
-  id          String             @id @default(uuid()) @db.Uuid
-  customerId  String             @map("customer_id") @db.Uuid
-  status      SubscriptionStatus
-  amount      Int
-  currency    String
-  planPriceId String?            @map("plan_price_id")
-  interval    BillingInterval?
-  metadata    Json?
-  canceledAt  DateTime?          @map("canceled_at") @db.Timestamptz
-  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  id                 String             @id @default(uuid()) @db.Uuid
+  customerId         String             @map("customer_id") @db.Uuid
+  status             SubscriptionStatus
+  amount             Int
+  currency           String
+  planPriceId        String?            @map("plan_price_id")
+  interval           BillingInterval?
+  metadata           Json?
+  cancelAtPeriodEnd  Boolean            @default(false) @map("cancel_at_period_end")
+  pausedAt           DateTime?          @map("paused_at") @db.Timestamptz
+  currentPeriodStart DateTime?          @map("current_period_start") @db.Timestamptz
+  currentPeriodEnd   DateTime?          @map("current_period_end") @db.Timestamptz
+  canceledAt         DateTime?          @map("canceled_at") @db.Timestamptz
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz
 
-  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  invoices Invoice[]
+  customer   Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  invoices   Invoice[]
+  operations SubscriptionOp[]
 
   @@index([customerId])
   @@index([createdAt])
   @@map("sim_subscriptions")
+}
+
+model SubscriptionOp {
+  idempotencyKey String   @id @map("idempotency_key")
+  kind           String
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([subscriptionId])
+  @@map("sim_subscription_ops")
 }
 
 model Invoice {

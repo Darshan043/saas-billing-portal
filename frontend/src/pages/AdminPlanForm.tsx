@@ -1,6 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
+import {
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  Skeleton,
+} from '../components/ui';
 import { ApiError, api } from '../lib/api';
 import { minorToMajorInput, parseMajorToMinor } from '../lib/money';
 import type { AdminPlan } from '../lib/plans';
@@ -11,7 +18,7 @@ const formSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100),
   description: z.string().trim().min(1, 'Description is required').max(2000),
   featuresText: z.string().trim().min(1, 'Add at least one feature'),
-  usageLimit: z.number().int().positive(),
+  usageLimit: z.number().int().positive('Usage limit must be a positive number'),
   currency: z.enum(CURRENCIES),
   monthlyMajor: z.string().trim().min(1, 'Monthly price is required'),
   yearlyMajor: z.string().trim().min(1, 'Yearly price is required'),
@@ -187,7 +194,7 @@ export function AdminPlanForm() {
         body: JSON.stringify(body),
       });
       setOriginal(data.plan);
-      setSuccess('Plan saved.');
+      setSuccess('Plan updated successfully.');
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.details?.length) {
@@ -208,136 +215,242 @@ export function AdminPlanForm() {
 
   if (loading) {
     return (
-      <main className="page">
-        <p className="muted">Loading plan…</p>
+      <main className="page page-wide">
+        <PageHeader title="Loading Plan…" description="Fetching plan configuration from database." />
+        <Card>
+          <Skeleton width="40%" height="2rem" />
+          <Skeleton width="100%" height="4rem" style={{ margin: '1rem 0' }} />
+          <Skeleton width="60%" height="2rem" />
+        </Card>
       </main>
     );
   }
 
   if (loadError) {
     return (
-      <main className="page">
-        <h1>{isEdit ? 'Edit plan' : 'Create plan'}</h1>
-        <p className="error">{loadError}</p>
-        <p>
-          <Link to="/admin/plans">Back to plans</Link>
-        </p>
+      <main className="page page-wide">
+        <PageHeader title={isEdit ? 'Edit Plan' : 'Create Plan'} />
+        <Card>
+          <EmptyState
+            icon="⚠️"
+            title="Plan could not be loaded"
+            description={loadError}
+            action={
+              <Link to="/admin/plans" style={{ textDecoration: 'none' }}>
+                <Button>Back to Plans</Button>
+              </Link>
+            }
+          />
+        </Card>
       </main>
     );
   }
 
   return (
-    <main className="page">
-      <h1>{isEdit ? 'Edit plan' : 'Create plan'}</h1>
-      <p className="muted">
-        Prices are stored in minor units. Changing a price creates a new version and
-        leaves the old one for existing subscriptions.
-      </p>
-      <form className="form form-wide" onSubmit={(event) => void onSubmit(event)}>
-        {serverError && <p className="error">{serverError}</p>}
-        {success && <p className="success">{success}</p>}
-        <label>
-          Name
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-          {fieldErrors.name && (
-            <span className="field-error">{fieldErrors.name}</span>
-          )}
-        </label>
-        <label>
-          Description
-          <textarea
-            rows={3}
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-          />
-          {fieldErrors.description && (
-            <span className="field-error">{fieldErrors.description}</span>
-          )}
-        </label>
-        <label>
-          Features (one per line)
-          <textarea
-            rows={5}
-            value={featuresText}
-            onChange={(event) => setFeaturesText(event.target.value)}
-          />
-          {fieldErrors.featuresText && (
-            <span className="field-error">{fieldErrors.featuresText}</span>
-          )}
-        </label>
-        <label>
-          Usage limit (API calls / month)
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={usageLimit}
-            onChange={(event) => setUsageLimit(event.target.value)}
-          />
-          {fieldErrors.usageLimit && (
-            <span className="field-error">{fieldErrors.usageLimit}</span>
-          )}
-        </label>
-        <label>
-          Currency
-          <select
-            value={currency}
-            onChange={(event) =>
-              setCurrency(event.target.value as (typeof CURRENCIES)[number])
-            }
-          >
-            {CURRENCIES.map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Monthly price
-          <input
-            type="text"
-            inputMode="decimal"
-            value={monthlyMajor}
-            onChange={(event) => setMonthlyMajor(event.target.value)}
-          />
-          {fieldErrors.monthlyMajor && (
-            <span className="field-error">{fieldErrors.monthlyMajor}</span>
-          )}
-        </label>
-        <label>
-          Yearly price
-          <input
-            type="text"
-            inputMode="decimal"
-            value={yearlyMajor}
-            onChange={(event) => setYearlyMajor(event.target.value)}
-          />
-          {fieldErrors.yearlyMajor && (
-            <span className="field-error">{fieldErrors.yearlyMajor}</span>
-          )}
-        </label>
-        {isEdit && (
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={isActive}
-              onChange={(event) => setIsActive(event.target.checked)}
-            />
-            Active (visible in the public catalogue)
-          </label>
+    <main className="page page-wide">
+      <PageHeader
+        title={isEdit ? `Edit Plan: ${name || 'Plan'}` : 'Create New Plan'}
+        description="Configure plan features, pricing intervals, API call limits, and catalogue visibility."
+      />
+
+      <form onSubmit={(event) => void onSubmit(event)} style={{ maxWidth: '48rem' }}>
+        {serverError && (
+          <div className="callout-banner callout-banner-danger" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+            <span>{serverError}</span>
+          </div>
         )}
-        <button type="submit" disabled={submitting}>
-          {submitting ? 'Saving…' : isEdit ? 'Save plan' : 'Create plan'}
-        </button>
+        {success && (
+          <div className="callout-banner callout-banner-success" role="status" style={{ marginBottom: 'var(--space-4)' }}>
+            <span>{success}</span>
+          </div>
+        )}
+
+        {/* Section 1: Basic Plan Details */}
+        <div className="form-section-card">
+          <h2 className="form-section-title">1. Plan Information</h2>
+          <p className="form-section-desc">
+            Define how this plan appears in customer pricing tables and invoices.
+          </p>
+
+          <div className="form-field">
+            <label className="form-field-label" htmlFor="plan-name">
+              Plan Name
+            </label>
+            <input
+              id="plan-name"
+              className={`form-control ${fieldErrors.name ? 'error' : ''}`}
+              type="text"
+              placeholder="e.g. Pro, Growth, Enterprise"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+            {fieldErrors.name && (
+              <span className="field-error">{fieldErrors.name}</span>
+            )}
+          </div>
+
+          <div className="form-field">
+            <label className="form-field-label" htmlFor="plan-description">
+              Description
+            </label>
+            <textarea
+              id="plan-description"
+              className={`form-control ${fieldErrors.description ? 'error' : ''}`}
+              rows={3}
+              placeholder="Brief summary of who this plan is tailored for"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+            {fieldErrors.description && (
+              <span className="field-error">{fieldErrors.description}</span>
+            )}
+          </div>
+
+          <div className="form-field">
+            <label className="form-field-label" htmlFor="plan-features">
+              Features (one per line)
+            </label>
+            <textarea
+              id="plan-features"
+              className={`form-control ${fieldErrors.featuresText ? 'error' : ''}`}
+              rows={5}
+              placeholder="Dedicated webhook support&#10;Unlimited team seats&#10;99.9% SLA"
+              value={featuresText}
+              onChange={(event) => setFeaturesText(event.target.value)}
+            />
+            <div className="form-field-helper">
+              Each line is converted into a bullet point on the public pricing cards.
+            </div>
+            {fieldErrors.featuresText && (
+              <span className="field-error">{fieldErrors.featuresText}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Section 2: Pricing Configuration */}
+        <div className="form-section-card">
+          <h2 className="form-section-title">2. Pricing & Currency</h2>
+          <p className="form-section-desc">
+            Prices are saved in minor currency units. Updating prices on an existing plan generates a new version without modifying active subscriber amounts.
+          </p>
+
+          <div className="form-grid-3">
+            <div className="form-field">
+              <label className="form-field-label" htmlFor="plan-currency">
+                Currency
+              </label>
+              <select
+                id="plan-currency"
+                className="form-control"
+                value={currency}
+                onChange={(event) =>
+                  setCurrency(event.target.value as (typeof CURRENCIES)[number])
+                }
+              >
+                {CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-field">
+              <label className="form-field-label" htmlFor="plan-monthly">
+                Monthly Price ({currency})
+              </label>
+              <input
+                id="plan-monthly"
+                className={`form-control ${fieldErrors.monthlyMajor ? 'error' : ''}`}
+                type="text"
+                inputMode="decimal"
+                placeholder="29.00"
+                value={monthlyMajor}
+                onChange={(event) => setMonthlyMajor(event.target.value)}
+              />
+              {fieldErrors.monthlyMajor && (
+                <span className="field-error">{fieldErrors.monthlyMajor}</span>
+              )}
+            </div>
+
+            <div className="form-field">
+              <label className="form-field-label" htmlFor="plan-yearly">
+                Yearly Price ({currency})
+              </label>
+              <input
+                id="plan-yearly"
+                className={`form-control ${fieldErrors.yearlyMajor ? 'error' : ''}`}
+                type="text"
+                inputMode="decimal"
+                placeholder="290.00"
+                value={yearlyMajor}
+                onChange={(event) => setYearlyMajor(event.target.value)}
+              />
+              {fieldErrors.yearlyMajor && (
+                <span className="field-error">{fieldErrors.yearlyMajor}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Usage Quotas & Visibility */}
+        <div className="form-section-card">
+          <h2 className="form-section-title">3. Quota Limits & Catalogue Status</h2>
+          <p className="form-section-desc">
+            Set the monthly API call allowance and visibility in the public plan catalogue.
+          </p>
+
+          <div className="form-field">
+            <label className="form-field-label" htmlFor="plan-usage">
+              Monthly Usage Limit (API calls / month)
+            </label>
+            <input
+              id="plan-usage"
+              className={`form-control ${fieldErrors.usageLimit ? 'error' : ''}`}
+              type="number"
+              min={1}
+              step={1}
+              value={usageLimit}
+              onChange={(event) => setUsageLimit(event.target.value)}
+            />
+            <div className="form-field-helper">
+              Included requests before any rate limiting applies.
+            </div>
+            {fieldErrors.usageLimit && (
+              <span className="field-error">{fieldErrors.usageLimit}</span>
+            )}
+          </div>
+
+          {isEdit && (
+            <div className="form-field" style={{ marginTop: 'var(--space-4)' }}>
+              <label className="form-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={(event) => setIsActive(event.target.checked)}
+                />
+                <span>Active (visible in public pricing catalogue for customer subscriptions)</span>
+              </label>
+            </div>
+          )}
+        </div>
+
+        {/* Action Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginTop: 'var(--space-6)' }}>
+          <Button
+            type="submit"
+            disabled={submitting}
+          >
+            {submitting ? 'Saving…' : isEdit ? 'Save Plan Changes' : 'Create Plan'}
+          </Button>
+
+          <Link to="/admin/plans" style={{ textDecoration: 'none' }}>
+            <Button variant="secondary" type="button">
+              Cancel
+            </Button>
+          </Link>
+        </div>
       </form>
-      <p className="muted">
-        <Link to="/admin/plans">Back to plans</Link>
-      </p>
     </main>
   );
 }

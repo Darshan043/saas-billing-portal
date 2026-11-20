@@ -5,3 +5,7 @@ dist
 coverage
 .DS_Store
 *.log
+
+# Local backup and temporary test files
+/original-databases-backup.sql
+/backend/tmp-step11-e2e.ps1

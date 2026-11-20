@@ -1,18 +1,44 @@
 # BillingHub
 
-BillingHub is a subscription-based SaaS billing and customer portal. This repository currently includes Docker Compose, Prisma, cookie JWT authentication, organization accounts, a versioned plan catalogue, a labelled payment simulator, a webhook receiver that stores signed simulator events, a pg-boss worker, and first-time subscription checkout. A BillingHub subscription becomes **ACTIVE only after** the worker processes a verified `subscription.activated` webhook.
+BillingHub is a production-grade, subscription-based SaaS billing and customer portal. It provides complete multi-tenant organization subscription management, a versioned pricing catalogue, prorated upgrades and scheduled downgrades, pause and resume functionality, immediate and period-end cancellations, automated invoice generation with PDF downloads, a transaction ledger, and asynchronous webhook processing backed by pg-boss background jobs.
 
-The payment provider in this project is a **SIMULATOR**. It is clearly labelled and never moves real money. Dashboard: http://localhost:4100 . Design notes: [docs/payment-simulator.md](docs/payment-simulator.md).
+> [!IMPORTANT]
+> **SIMULATOR NOTICE — NO REAL MONEY IS MOVED**
+> The payment provider in this project is a **SIMULATOR**. It is clearly labelled across both UI and APIs and never interacts with real card networks or moves real funds.
+> - Simulator Dashboard: http://localhost:4100
+> - Design & Architecture Notes: [docs/payment-simulator.md](docs/payment-simulator.md)
+
+---
+
+## Features
+
+- **Authentication & Organization Management**: Secure session management using httpOnly JWT cookies, role-based authorization (`OWNER`, `MEMBER`, `ADMIN`), organization onboarding, and profile/billing email management.
+- **Monthly & Yearly Subscription Plans**: Versioned public plan catalogue and administrative plan management supporting both `MONTH` and `YEAR` intervals, quota configurations, and integer minor-unit pricing.
+- **Subscription Checkout**: Seamless checkout flow with simulated payment token selection, pending state tracking, and webhook-driven activation. A subscription becomes `ACTIVE` only after the worker verifies and processes the `subscription.activated` webhook event.
+- **Upgrade & Downgrade with Proration/Scheduling**: Immediate prorated upgrades with deterministic BigInt calculations and scheduled downgrades applied automatically at billing period renewal.
+- **Pause & Resume**: Self-service pause capability for active subscriptions with automatic billing period extension upon resumption.
+- **Immediate & Scheduled Cancellation**: Flexible cancellation options (immediately terminate access or retain access until period end), with undo support for scheduled cancellations.
+- **Payment Simulator**: Fully isolated mock gateway providing test payment tokens (`tok_sim_visa_ok`, `tok_sim_declined`, `tok_sim_insufficient_funds`), realistic delay options, an interactive web dashboard, and cryptographically signed HMAC webhooks.
+- **Webhook Processing & Idempotency**: Secure webhook receiver verifying `X-Simulator-Signature` headers, persistent event storage, duplicate replay detection, and resilient background job execution via pg-boss.
+- **Invoice Generation & PDF Downloads**: Automated creation of itemized `PAID` invoices upon payment completion, sequential numbering (`INV-000001`), line-item proration breakdowns, and on-the-fly PDF generation and streaming.
+- **Payment History**: Complete ledger recording transactions, amounts, currencies, payment statuses (`SUCCEEDED`, `FAILED`), failure reasons, and links to generated invoices.
+- **Customer & Admin Dashboards**: Modern responsive interface featuring customer metrics, plan comparisons, invoice management, and administrative plan catalogue controls.
+
+---
 
 ## Prerequisites
 
 - Node.js 20
 - npm
-- Docker Desktop (or another Docker Engine + Compose v2)
+- Docker Desktop (or another Docker Engine + Docker Compose v2)
+
+---
 
 ## First-time setup
 
-Copy every `.env.example` to `.env`. Compose reads the **root** `.env`. The copies inside each app are for running that app on the host later.
+Copy every `.env.example` to `.env`. Docker Compose reads the **root** `.env`. The copies inside each application folder (`backend`, `frontend`, `simulator`) are for running those services directly on the host machine.
+
+On Linux / macOS:
 
 ```bash
 cp .env.example .env
@@ -32,6 +58,8 @@ Copy-Item simulator/.env.example simulator/.env
 
 Do not commit `.env` files. Placeholder secrets in the example files are **dev-only**.
 
+---
+
 ## How to run
 
 From the repository root:
@@ -42,53 +70,64 @@ docker compose up --build
 
 Then open:
 
-| What              | URL                                      |
-| ----------------- | ---------------------------------------- |
-| Frontend          | http://localhost:5173                    |
-| Backend health    | http://localhost:4000/health             |
-| Simulator health  | http://localhost:4100/health             |
-| Simulator dashboard | http://localhost:4100 (banner: SIMULATOR — no real money) |
-| Mailpit web UI    | http://localhost:8025                    |
-| Worker            | no published port (logs: `docker compose logs -f worker`) |
-| Postgres          | localhost:5432 (inside Docker: `postgres:5432`) |
+| What | URL | Notes |
+| --- | --- | --- |
+| Frontend | http://localhost:5173 | Customer portal, admin dashboard, and public pages |
+| Backend health | http://localhost:4000/health | Express API health check |
+| Simulator health | http://localhost:4100/health | Simulator health check |
+| Simulator dashboard | http://localhost:4100 | Visual control dashboard (SIMULATOR - no real money) |
+| Mailpit web UI | http://localhost:8025 | Local email testing interface |
+| Worker | No published port | Logs: `docker compose logs -f worker` |
+| PostgreSQL | localhost:5433 (or `${POSTGRES_PORT:-5432}`) | Host mapped port; inside Docker network: `postgres:5432` |
 
-If a host port is already in use (common for 5432), change that port in the root `.env` and run Compose again. The backend still talks to Postgres on the internal Docker network, so only the published host port needs to change.
+> [!NOTE]
+> If a host port is already in use (e.g., PostgreSQL port 5432 is frequently occupied by a local database server), configure `POSTGRES_PORT=5433` in the root `.env` file before running Compose. The backend and simulator communicate with PostgreSQL over the internal Docker network on `postgres:5432`, so altering the published host port will not affect container networking.
 
-Use `http://localhost:5173` (not `127.0.0.1`) so the backend CORS allow-list matches.
+Always access the frontend at `http://localhost:5173` (rather than `127.0.0.1`) to match the backend CORS allow-list.
 
-Stop with `Ctrl+C`, or `docker compose down` (keeps the Postgres volume). Do **not** use `docker compose down -v` unless you intentionally want to destroy local data. Safe restarts: `docker compose restart worker` or `docker compose up -d --build worker`.
+To stop services: `Ctrl+C` or `docker compose down` (preserves the PostgreSQL data volume).
+Do **not** run `docker compose down -v` unless you intentionally wish to erase all local database records.
+
+---
 
 ## Authentication
 
-The API uses an httpOnly JWT cookie. The browser client always sends `credentials: "include"`. Design notes: [docs/auth-design.md](docs/auth-design.md).
+The API uses an `httpOnly` JWT session cookie. The browser client always dispatches requests with `credentials: "include"`. Architectural reference: [docs/auth-design.md](docs/auth-design.md).
 
-The current organization is **always derived from the logged-in user's membership**. Clients never send an organization id for their own data.
+The active organization context is **always derived from the authenticated user's active membership**. Clients never send an arbitrary organization ID for their own requests.
 
-| Method | Path | Auth | Purpose |
+| Method | Path | Auth Required | Purpose |
 | --- | --- | --- | --- |
-| POST | `/auth/register` | No | Body `{ name, email, password, organizationName }`. Creates CUSTOMER + organization + OWNER membership in one transaction and sets the session cookie |
-| POST | `/auth/login` | No | Sign in and set the session cookie. User includes `organization` or `null` |
-| POST | `/auth/logout` | No | Clear the cookie |
-| GET | `/auth/me` | Cookie | Current user, including `organization` or `null` |
-| GET | `/auth/ping-customer` | Cookie | Demo: any signed-in user |
-| GET | `/admin/ping` | Cookie + ADMIN | Demo: admin-only |
-| GET | `/plans` | No | Active plans and current MONTH/YEAR prices only (public catalogue) |
-| GET | `/admin/plans` | Cookie + ADMIN | All plans, including inactive, with current prices |
-| GET | `/admin/plans/:id` | Cookie + ADMIN | One plan |
-| POST | `/admin/plans` | Cookie + ADMIN | Create a plan and its first monthly and yearly prices |
-| PATCH | `/admin/plans/:id` | Cookie + ADMIN | Update plan details, active flag, and/or version a price |
-| POST | `/orgs` | Cookie | Body `{ name, billingEmail? }`. For customers who have no organization yet. ADMIN is 403. Already a member is 409 |
-| GET | `/orgs/current` | Cookie + organization | Current organization (no `providerCustomerId` / `nextInvoiceNumber`) |
-| PATCH | `/orgs/current` | Cookie + organization + OWNER | Body `{ name?, billingEmail? }` (at least one field). MEMBER is 403 |
-| POST | `/subscriptions` | Cookie + organization OWNER | Body `{ planPriceId, paymentToken }`. Creates a `PENDING` subscription, then calls the simulator. Never sets `ACTIVE` |
-| GET | `/subscriptions/current` | Cookie + organization | Latest subscription view for the current org, or `null`. Polled by the status page |
-| GET | `/invoices` | Cookie + organization | Paginated invoices for the current org (`page`, `pageSize` max 50) |
-| GET | `/invoices/:id` | Cookie + organization | Invoice detail with line items and payment. Other org’s id is 404 |
-| GET | `/invoices/:id/pdf` | Cookie + organization | PDF download (`invoice-INV-000001.pdf`). Same 404 rule |
-| GET | `/payments` | Cookie + organization | Paginated payment history, including failed first payments |
-| POST | `/webhooks/payments` | HMAC (`X-Simulator-Signature`) | Simulator events only: verify signature on the raw body, store the row, enqueue a background job. `subscription.activated`, first-payment failures, and `payment.succeeded` (invoice + payment) are handled; other types remain stubs |
+| POST | `/auth/register` | No | Body `{ name, email, password, organizationName }`. Creates CUSTOMER + organization + OWNER membership in a single transaction and sets the session cookie |
+| POST | `/auth/login` | No | Sign in and set the session cookie. Response payload includes user and organization details (or `null`) |
+| POST | `/auth/logout` | No | Clears the session cookie |
+| GET | `/auth/me` | Cookie | Returns current authenticated user and associated organization |
+| GET | `/auth/ping-customer` | Cookie | Diagnostic check: verified customer access |
+| GET | `/admin/ping` | Cookie + ADMIN | Diagnostic check: admin-only access |
+| GET | `/plans` | No | Public catalogue: active plans with current MONTH and YEAR pricing |
+| GET | `/admin/plans` | Cookie + ADMIN | Comprehensive catalogue: all plans including inactive, with current pricing |
+| GET | `/admin/plans/:id` | Cookie + ADMIN | Detailed view for a single plan |
+| POST | `/admin/plans` | Cookie + ADMIN | Create a new plan along with initial monthly and yearly price records |
+| PATCH | `/admin/plans/:id` | Cookie + ADMIN | Update plan metadata, toggle active status, or version pricing |
+| POST | `/orgs` | Cookie | Body `{ name, billingEmail? }`. Allows a user without an organization to onboard. ADMIN is 403; existing members return 409 |
+| GET | `/orgs/current` | Cookie + organization | Current organization profile (excludes internal provider identifiers) |
+| PATCH | `/orgs/current` | Cookie + organization + OWNER | Body `{ name?, billingEmail? }` (requires at least one field). MEMBER is 403 |
+| POST | `/subscriptions` | Cookie + organization OWNER | Body `{ planPriceId, paymentToken }`. Creates a `PENDING` subscription, dispatches to simulator. Never directly marks `ACTIVE` |
+| GET | `/subscriptions/current` | Cookie + organization | Current subscription view for organization, or `null`. Includes `planPriceId`, `usageLimit`, `pendingChange`, and `capabilities` |
+| GET | `/subscriptions/current/change-preview` | Cookie + organization OWNER | Query `planPriceId`. Calculates upgrade/downgrade estimate; performs no mutation |
+| POST | `/subscriptions/current/change-plan` | Cookie + organization OWNER | Body `{ planPriceId }`. Executes immediate prorated upgrade or schedules downgrade at period end |
+| DELETE | `/subscriptions/current/scheduled-change` | Cookie + organization OWNER | Cancels a pending scheduled downgrade |
+| POST | `/subscriptions/current/pause` | Cookie + organization OWNER | Pauses an `ACTIVE` subscription |
+| POST | `/subscriptions/current/resume` | Cookie + organization OWNER | Resumes a `PAUSED` subscription and extends the billing period by the duration paused |
+| POST | `/subscriptions/current/cancel` | Cookie + organization OWNER | Body `{ when: "IMMEDIATELY" \| "AT_PERIOD_END" }` |
+| POST | `/subscriptions/current/undo-cancel` | Cookie + organization OWNER | Reverses a scheduled period-end cancellation |
+| GET | `/invoices` | Cookie + organization | Paginated invoices for current organization (`page`, `pageSize` up to 50) |
+| GET | `/invoices/:id` | Cookie + organization | Detailed invoice record with itemized line items and payment status |
+| GET | `/invoices/:id/pdf` | Cookie + organization | Streams invoice PDF binary (`invoice-INV-000001.pdf`) |
+| GET | `/payments` | Cookie + organization | Paginated payment history, including initial payment attempts |
+| POST | `/webhooks/payments` | HMAC (`X-Simulator-Signature`) | Ingests signed simulator events, verifies signatures, records events, and enqueues pg-boss jobs |
 
-Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` from `.env` (defaults in `.env.example` are **dev-only**: `admin@billinghub.local` / `ChangeMe123!`).
+To log in as the default administrator, use `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` from `.env` (defaults in `.env.example` are **dev-only**: `admin@billinghub.local` / `ChangeMe123!`).
 
 ### Error format
 
@@ -102,134 +141,182 @@ Log in as the seeded admin with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` fro
 }
 ```
 
-`details` is optional. Auth-related codes include `INVALID_CREDENTIALS`, `UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_DISABLED`, `EMAIL_ALREADY_EXISTS`, `ORGANIZATION_ALREADY_EXISTS`, `ORGANIZATION_REQUIRED`, `PLAN_NAME_EXISTS`, `PLAN_NOT_FOUND`, `RATE_LIMITED`, `INVALID_JSON`, `NOT_FOUND`. Webhook codes include `INVALID_SIGNATURE`, `INVALID_PAYLOAD`, `PAYLOAD_TOO_LARGE`.
+The `details` array is optional. Common error codes include:
+- Auth: `INVALID_CREDENTIALS`, `UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_DISABLED`, `EMAIL_ALREADY_EXISTS`, `ORGANIZATION_ALREADY_EXISTS`, `ORGANIZATION_REQUIRED`
+- Plans: `PLAN_NAME_EXISTS`, `PLAN_NOT_FOUND`, `NOT_FOUND`
+- Rate limiting & input: `RATE_LIMITED`, `INVALID_JSON`, `VALIDATION_ERROR`
+- Webhooks: `INVALID_SIGNATURE`, `INVALID_PAYLOAD`, `PAYLOAD_TOO_LARGE`
 
 ### Plans and prices
 
-Money is stored as integer minor units plus a 3-letter currency (`USD` default; also `INR`, `EUR`, `GBP`). Billing intervals are `MONTH` and `YEAR`. Changing a price retires the previous `plan_prices` row (`isActive = false`, `retiredAt` set) and inserts a new current row. Existing subscriptions will keep the old price id in later steps. Public UI: http://localhost:5173/pricing . Admin UI: http://localhost:5173/admin/plans . Design notes: [docs/plan-management.md](docs/plan-management.md).
+Monetary values are stored as integer minor units with a 3-letter currency code (`USD` by default; also supports `INR`, `EUR`, `GBP`). Billing intervals are `MONTH` and `YEAR`. Modifying a price archives the prior `plan_prices` row (`isActive = false`, timestamp in `retiredAt`) and records a new active price. Existing subscriptions continue to reference their original price ID.
 
-### Auth env variables
+- Public Pricing UI: http://localhost:5173/pricing
+- Admin Plan Management: http://localhost:5173/admin/plans
+- Design Reference: [docs/plan-management.md](docs/plan-management.md)
 
-| Name | Purpose |
+### Environment variables
+
+| Variable | Description |
 | --- | --- |
-| `JWT_SECRET` | HS256 signing secret (min 32 chars, **dev-only** in `.env.example`) |
-| `JWT_EXPIRES_IN` | Token lifetime (default `7d`) |
-| `COOKIE_NAME` | Cookie name (default `billing_token`) |
-| `TEST_DATABASE_URL` | Backend tests only; must be database `billinghub_test` |
-| `WEBHOOK_SIGNING_SECRET` | Shared HMAC secret. **Must be identical** for backend and simulator (**dev-only** in `.env.example`) |
-| `WEBHOOK_TOLERANCE_SECONDS` | Allowed clock skew for `X-Simulator-Timestamp` (default `300`) |
-| `WEBHOOK_JOB_RETRY_LIMIT` | pg-boss extra retries for webhook jobs (default `5`) |
-| `SUBSCRIPTION_PENDING_TIMEOUT_MINUTES` | Auto-cancel abandoned `PENDING` checkouts (default `15`) |
+| `POSTGRES_USER` | PostgreSQL superuser username |
+| `POSTGRES_PASSWORD` | PostgreSQL superuser password |
+| `POSTGRES_DB` | Main application database name (`billinghub`) |
+| `POSTGRES_PORT` | Published PostgreSQL host port (default `5432`, configured to `5433` in `.env` if 5432 is occupied) |
+| `DATABASE_URL` | Application database connection string |
+| `TEST_DATABASE_URL` | Dedicated test database connection string (`billinghub_test`) |
+| `FRONTEND_PORT` | Port for the Vite frontend server (default `5173`) |
+| `BACKEND_PORT` | Port for the Express backend API (default `4000`) |
+| `SIMULATOR_PORT` | Port for the payment simulator server (default `4100`) |
+| `MAILPIT_SMTP_PORT` | Port for local SMTP capture (default `1025`) |
+| `MAILPIT_UI_PORT` | Port for Mailpit web inbox (default `8025`) |
+| `JWT_SECRET` | HS256 secret for signing auth session cookies (minimum 32 characters) |
+| `JWT_EXPIRES_IN` | Session cookie validity duration (default `7d`) |
+| `COOKIE_NAME` | Name of the authentication cookie (default `billing_token`) |
+| `WEBHOOK_SIGNING_SECRET` | Shared HMAC secret for verifying webhook signatures between backend and simulator |
+| `WEBHOOK_TOLERANCE_SECONDS` | Maximum allowed timestamp skew for `X-Simulator-Timestamp` (default `300` seconds) |
+| `WEBHOOK_JOB_RETRY_LIMIT` | Maximum background job retries managed by pg-boss (default `5`) |
+| `SUBSCRIPTION_PENDING_TIMEOUT_MINUTES` | Timeout threshold for cancelling abandoned checkout subscriptions (default `15` minutes) |
+| `SIMULATOR_API_KEY` | Shared API token for simulator API authentication |
+| `SIMULATOR_CONTROL_TOKEN` | Bearer token for automated simulator control routes |
 
-Webhook design notes: [docs/webhooks.md](docs/webhooks.md). Background jobs: [docs/background-jobs.md](docs/background-jobs.md). Checkout: [docs/subscriptions-checkout.md](docs/subscriptions-checkout.md). Invoices: [docs/invoices-payments.md](docs/invoices-payments.md). Events are stored, then processed by the worker. First-payment activation uses `subscription.activated`. `payment.succeeded` creates one PAID invoice and one SUCCEEDED payment for that provider payment id.
+---
 
-### How to test checkout
+## Testing checkout
 
-The payment provider is the labelled simulator. Use only these tokens (never a card number):
+The payment provider is an isolated simulator. When testing checkout, use these designated test tokens:
 
-| Token | Expected BillingHub outcome |
+| Token | Expected Outcome |
 | --- | --- |
-| `tok_sim_visa_ok` | `POST /subscriptions` returns `PENDING`. After the worker processes `subscription.activated`, `GET /subscriptions/current` is `ACTIVE` with period dates |
-| `tok_sim_declined` | Checkout stays `PENDING` until `payment.declined` is processed, then `CANCELED` with `failureReason` "Card declined". Retry with the success token |
-| `tok_sim_insufficient_funds` | Same as declined, with "Insufficient funds" |
+| `tok_sim_visa_ok` | `POST /subscriptions` returns `PENDING`. When the worker processes `subscription.activated`, the subscription transitions to `ACTIVE` with valid period dates. |
+| `tok_sim_declined` | The subscription remains `PENDING` until `payment.declined` is processed, transitioning to `CANCELED` with `failureReason = "Card declined"`. |
+| `tok_sim_insufficient_funds` | Same failure lifecycle as declined, with `failureReason = "Insufficient funds"`. |
 
-Browser path: http://localhost:5173/pricing → Choose plan → checkout notice → Subscribe → `/app/subscription/status` (polls every 2 seconds) → success card. Register a **new** customer for real-simulator checks; do not reuse existing production-like accounts.
+End-to-end checkout flow:
+1. Navigate to http://localhost:5173/pricing
+2. Select a plan to open `/checkout`
+3. Select a simulated payment token (e.g. `tok_sim_visa_ok`)
+4. Confirm subscription
+5. Observe `/app/subscription/status` polling until status transitions to active
 
-### How to test invoices
+---
 
-After a successful checkout (`tok_sim_visa_ok`) wait until the subscription is `ACTIVE`, then:
+## Testing invoices & payment history
 
-1. Open http://localhost:5173/app/billing/invoices — `INV-000001` should be listed. Open it, then **Download PDF**.
-2. Open http://localhost:5173/app/billing/payments — the SUCCEEDED payment should link to that invoice.
-3. With curl and a cookie jar: `GET /invoices`, `GET /invoices/:id`, `GET /payments`, and `GET /invoices/:id/pdf` (save with `-o`; the file should start with `%PDF`).
-4. In the simulator dashboard, replay/duplicate the `payment.succeeded` event. There is still one invoice and one payment; `webhook_events.duplicate_count` increases; `organizations.next_invoice_number` does not change.
-5. A declined checkout (`tok_sim_declined`) shows a FAILED payment and no invoice.
+1. Complete a successful checkout using `tok_sim_visa_ok` and wait until the status displays `ACTIVE`.
+2. Open http://localhost:5173/app/billing/invoices — invoice `INV-000001` will be listed. Click into the detail view and select **Download PDF**.
+3. Open http://localhost:5173/app/billing/payments — the `SUCCEEDED` payment will reference that invoice.
+4. Using curl or an API client:
+   - `GET /invoices`
+   - `GET /invoices/:id`
+   - `GET /payments`
+   - `GET /invoices/:id/pdf` (streams valid PDF binary beginning with `%PDF-1.4`)
+5. In the simulator dashboard (http://localhost:4100), trigger a duplicate `payment.succeeded` event:
+   - Webhook idempotency ensures no duplicate invoice or payment is created.
+   - `webhook_events.duplicate_count` increments.
+   - `organizations.next_invoice_number` remains unchanged.
+6. A failed checkout (`tok_sim_declined`) creates a `FAILED` payment record and generates no invoice.
 
-UI: http://localhost:5173/app/billing/invoices and http://localhost:5173/app/billing/payments . Details: [docs/invoices-payments.md](docs/invoices-payments.md).
+---
 
-## Database
+## Database management
 
-Postgres is the `postgres` Compose service. Inside Docker, `DATABASE_URL` uses hostname `postgres` (not `localhost`). Run Prisma commands **inside the backend container**:
+PostgreSQL runs via the `postgres` Docker Compose service. Inside the Docker network, `DATABASE_URL` connects to the hostname `postgres`. Run Prisma operations inside the backend container:
 
 ```bash
-docker compose exec backend npm run prisma:migrate -- --name init
+docker compose exec backend npm run prisma:migrate -- --name <migration_name>
 docker compose exec backend npm run prisma:deploy
 docker compose exec backend npm run prisma:seed
-docker compose exec backend npm run prisma:reset
 docker compose exec backend npm run prisma:studio
 ```
 
-The backend image runs `npx prisma generate` after `npm ci` and again when the container starts (`npx prisma generate && npm run dev`). That keeps the generated client inside the anonymous `node_modules` volume even though source is bind-mounted.
-
-Dev admin credentials come from `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in the root `.env` (copy from `.env.example`). Defaults are **dev-only**: `admin@billinghub.local` / `ChangeMe123!`.
-
-Open a SQL shell:
+To access the interactive PostgreSQL shell:
 
 ```bash
 docker compose exec postgres psql -U billing -d billinghub
 ```
 
-Schema notes: [docs/database-schema.md](docs/database-schema.md).
-
-If you add backend npm packages and the container still uses an old `node_modules` volume:
+If connecting directly from the host machine:
 
 ```bash
-docker compose up --build --renew-anon-volumes
+psql -h localhost -p 5433 -U billing -d billinghub
 ```
 
-## Lint, typecheck, and tests
+*(Substitute `5433` with your configured `POSTGRES_PORT` if different).*
 
-Each app has its own `package.json`. There is no workspace root install.
+---
 
-Backend tests use a **separate** Postgres database named `billinghub_test` (`TEST_DATABASE_URL`). Simulator tests use `billinghub_sim_test`. They never migrate or truncate `billinghub`. Run them inside Docker so that URL points at the Compose Postgres:
+## Lint, typecheck, and test suites
+
+Each package maintains its own dependencies and `package.json`.
+
+Backend and simulator tests run against dedicated isolated databases (`billinghub_test` and `billinghub_sim_test`) and will never truncate or alter the primary development database. Execute tests inside Docker:
 
 ```bash
 docker compose exec backend npm run test
 docker compose exec simulator npm run test
 ```
 
+To run checks directly on the host:
+
 ```bash
+# Backend
 cd backend
 npm install
 npm run typecheck
 npm run lint
 npm test
 
+# Simulator
 cd ../simulator
 npm install
 npm run typecheck
 npm run lint
 npm test
 
+# Frontend
 cd ../frontend
 npm install
 npm run typecheck
 npm run lint
+npm run build
 ```
 
-Useful scripts in every app: `dev`, `lint`, `lint:fix`, `format`, `typecheck`. Backend and simulator also have `build`, `start`, and `test`. Backend also has `worker:dev` (tsx watch) and `worker` (`node dist/worker.js` after `npm run build`). Frontend also has `build` and `preview`.
+Available scripts across projects:
+- `dev`: Start local development server
+- `lint`: Check code quality with ESLint
+- `lint:fix`: Automatically fix ESLint warnings
+- `format`: Check formatting
+- `typecheck`: Run TypeScript compiler type checking (`tsc --noEmit`)
+- `test`: Run Vitest test suite (backend & simulator)
+- `build`: Build production bundles
+
+---
 
 ## Folder structure
 
 ```
 saas-billing-portal/
-  frontend/     React + Vite UI
-  backend/      Express API
-  simulator/    Labelled payment simulator (no real money)
-  docs/         Branching rules and architecture notes
+  backend/      Node.js + Express REST API, Prisma models, migrations, auth, and pg-boss background worker
+  frontend/     React 18 + TypeScript + Vite UI (Customer portal, Admin dashboard, Public pages)
+  simulator/    Labelled payment gateway simulator (no real money) and webhook dispatcher
+  docs/         Architecture, database schema, webhooks, and subscription lifecycle documentation
   docker-compose.yml
 ```
 
-## Docs
+---
 
-- [docs/branching.md](docs/branching.md) — branch names, commit prefixes, when to merge
-- [docs/architecture-notes.md](docs/architecture-notes.md) — fixed stack decisions and planned services
-- [docs/database-schema.md](docs/database-schema.md) — Prisma schema, ER diagram, and key constraints
-- [docs/auth-design.md](docs/auth-design.md) — cookie JWT, roles, and what is not included
-- [docs/organizations.md](docs/organizations.md) — one org per user, OWNER vs MEMBER, and scoping rules
-- [docs/plan-management.md](docs/plan-management.md) — catalogue, admin plans, and price versioning
-- [docs/payment-simulator.md](docs/payment-simulator.md) — simulator API, test tokens, HMAC webhooks, and dashboard
-- [docs/webhooks.md](docs/webhooks.md) — signature verification, idempotency, and `POST /webhooks/payments`
-- [docs/background-jobs.md](docs/background-jobs.md) — pg-boss worker, retries, dead letter, and how to add a handler
-- [docs/subscriptions-checkout.md](docs/subscriptions-checkout.md) — checkout flow, activation-only-via-webhook, and endpoints
-- [docs/invoices-payments.md](docs/invoices-payments.md) — invoice creation from `payment.succeeded`, numbering, PDF, and payment history
+## Documentation index
+
+- [docs/branching.md](docs/branching.md) - Branch naming conventions, commit prefixes, and merging criteria
+- [docs/architecture-notes.md](docs/architecture-notes.md) - Stack architecture decisions and service topology
+- [docs/database-schema.md](docs/database-schema.md) - Prisma schema, entity relationships, and constraints
+- [docs/auth-design.md](docs/auth-design.md) - Cookie JWT authentication, role-based authorization, and security scope
+- [docs/organizations.md](docs/organizations.md) - Tenant isolation, OWNER vs. MEMBER privileges, and scoping rules
+- [docs/plan-management.md](docs/plan-management.md) - Versioned plan catalogue, admin controls, and price grandfathering
+- [docs/payment-simulator.md](docs/payment-simulator.md) - Simulator API, test tokens, HMAC signatures, and web dashboard
+- [docs/webhooks.md](docs/webhooks.md) - Signature verification, event idempotency, and webhook endpoint handling
+- [docs/background-jobs.md](docs/background-jobs.md) - pg-boss worker, retry policies, dead-letter handling, and handlers
+- [docs/subscriptions-checkout.md](docs/subscriptions-checkout.md) - Checkout lifecycle, pending states, and webhook-driven activation
+- [docs/subscription-changes.md](docs/subscription-changes.md) - Upgrades with proration, scheduled downgrades, pause/resume, and cancellation
+- [docs/invoices-payments.md](docs/invoices-payments.md) - Invoice creation from payment events, sequential numbering, PDF generation, and payment history

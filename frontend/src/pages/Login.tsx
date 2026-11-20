@@ -2,6 +2,8 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useAuth } from '../auth/AuthContext';
+import { Button } from '../components/ui';
+import { BrandLogoIcon, EyeIcon, EyeOffIcon } from '../components/layouts/Icons';
 import { ApiError } from '../lib/api';
 
 const loginSchema = z.object({
@@ -21,6 +23,7 @@ export function Login() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -73,44 +76,98 @@ export function Login() {
   }
 
   return (
-    <main className="page">
-      <h1>Log in</h1>
-      <form className="form" onSubmit={(event) => void onSubmit(event)}>
-        {serverError && <p className="error">{serverError}</p>}
-        <label>
-          Email
-          <input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          {fieldErrors.email && (
-            <span className="field-error">{fieldErrors.email}</span>
-          )}
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          {fieldErrors.password && (
-            <span className="field-error">{fieldErrors.password}</span>
-          )}
-        </label>
-        <button type="submit" disabled={submitting}>
-          {submitting ? 'Logging in…' : 'Log in'}
-        </button>
-      </form>
-      <p className="muted">
-        No account?{' '}
-        <Link to="/register" state={from ? { from } : undefined}>
-          Register
+    <div className="auth-container">
+      <div className="auth-card">
+        {/* Brand Header */}
+        <Link to="/" className="auth-brand-wrap" aria-label="BillingHub home">
+          <span className="brand-icon">
+            <BrandLogoIcon style={{ width: '1.25rem', height: '1.25rem' }} />
+          </span>
+          <span style={{ fontWeight: 700, fontSize: '1.2rem', color: 'var(--color-navy-900)' }}>
+            BillingHub
+          </span>
         </Link>
-      </p>
-    </main>
+
+        <h1 className="auth-title">Welcome back</h1>
+        <p className="auth-subtitle">
+          Enter your credentials to access your billing account
+        </p>
+
+        {serverError && (
+          <div className="callout-banner callout-banner-danger" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+            <span>{serverError}</span>
+          </div>
+        )}
+
+        <form onSubmit={(event) => void onSubmit(event)}>
+          <div className="form-field">
+            <label className="form-field-label" htmlFor="login-email">
+              Email address
+            </label>
+            <input
+              id="login-email"
+              className={`form-control ${fieldErrors.email ? 'error' : ''}`}
+              type="email"
+              autoComplete="email"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            {fieldErrors.email && (
+              <span className="field-error">{fieldErrors.email}</span>
+            )}
+          </div>
+
+          <div className="form-field" style={{ marginTop: 'var(--space-3)' }}>
+            <label className="form-field-label" htmlFor="login-password">
+              Password
+            </label>
+            <div className="password-input-wrap">
+              <input
+                id="login-password"
+                className={`form-control ${fieldErrors.password ? 'error' : ''}`}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                onClick={() => setShowPassword((prev) => !prev)}
+              >
+                {showPassword ? (
+                  <EyeOffIcon style={{ width: '1.125rem', height: '1.125rem' }} />
+                ) : (
+                  <EyeIcon style={{ width: '1.125rem', height: '1.125rem' }} />
+                )}
+              </button>
+            </div>
+            {fieldErrors.password && (
+              <span className="field-error">{fieldErrors.password}</span>
+            )}
+          </div>
+
+          <div style={{ marginTop: 'var(--space-5)' }}>
+            <Button
+              type="submit"
+              disabled={submitting}
+              style={{ width: '100%', padding: '0.65rem' }}
+            >
+              {submitting ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </div>
+        </form>
+
+        <div className="auth-footer">
+          Don’t have an account yet?{' '}
+          <Link to="/register" state={from ? { from } : undefined}>
+            Create an account
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }

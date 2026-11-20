@@ -51,6 +51,7 @@ Simulator Prisma lives in `simulator/prisma/`. Models are prefixed `sim_*`:
 - `sim_payment_methods` (stores `tokenKind`, never a PAN)
 - `sim_payments`
 - `sim_subscriptions`
+- `sim_subscription_ops` (lifecycle idempotency keys)
 - `sim_invoices`
 - `sim_webhook_events`
 - `sim_webhook_deliveries`
@@ -96,6 +97,20 @@ Declined / insufficient-funds tokens still return HTTP 201. They do **not** emit
 `subscription.activated` `data` includes ISO `currentPeriodStart` / `currentPeriodEnd` (`MONTH` = +1 month, `YEAR` = +1 year). BillingHub must activate from this event, never from `subscription.created` and never from the checkout HTTP response.
 
 Simulated subscriptions are independent of BillingHub `subscriptions`. Create / update / cancel only change simulator rows and events.
+
+### Lifecycle additions (Step 11)
+
+Additive routes. Existing create / PATCH / immediate cancel are unchanged. Event type `subscription.cancelled` is still the **ended** subscription event.
+
+| Method | Path | Effect |
+| --- | --- | --- |
+| POST | `/v1/subscriptions/:id/change-plan` | Set `planPriceId` / `amount` / `currency`. If `chargeAmount` > 0, charge that amount with `Idempotency-Key` (same key returns the original result and does **not** emit another `payment.succeeded`). Optional `token` (default `tok_sim_visa_ok`). `metadata` and `description` are echoed on `payment.succeeded`. A declined charge does **not** change the plan. Emits `subscription.updated` (status still `active`). |
+| POST | `/v1/subscriptions/:id/cancel-at-period-end` | Body `{ "value": true \| false }`. Sets `cancelAtPeriodEnd` only. Status stays `active`. Does **not** emit `subscription.cancelled`. |
+| POST | `/v1/subscriptions/:id/pause` | Status `paused`. Emits `subscription.updated` with `status: "paused"`. |
+| POST | `/v1/subscriptions/:id/resume` | Optional `{ "currentPeriodEnd" }`. Status `active` again. Emits `subscription.updated`. |
+| POST | `/v1/subscriptions/:id/cancel` | Immediate end. Still the only path that marks `CANCELED` and emits `subscription.cancelled`. |
+
+Lifecycle POSTs accept `Idempotency-Key` (body `idempotencyKey` is a fallback). PATCH still does not charge.
 
 ## Webhook event structure
 
@@ -175,6 +190,10 @@ All `/v1` routes require `X-Simulator-Key`.
 | GET | `/v1/subscriptions/:id` |
 | PATCH | `/v1/subscriptions/:id` |
 | POST | `/v1/subscriptions/:id/cancel` |
+| POST | `/v1/subscriptions/:id/change-plan` |
+| POST | `/v1/subscriptions/:id/cancel-at-period-end` |
+| POST | `/v1/subscriptions/:id/pause` |
+| POST | `/v1/subscriptions/:id/resume` |
 | GET | `/v1/invoices` |
 | GET | `/v1/invoices/:id` |
 | GET | `/health` |

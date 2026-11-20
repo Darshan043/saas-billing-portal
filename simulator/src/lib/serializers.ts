@@ -50,16 +50,30 @@ export function serializePayment(payment: Payment) {
   };
 }
 
+function subscriptionStatus(status: Subscription['status']): string {
+  if (status === 'CANCELED') {
+    return 'canceled';
+  }
+  if (status === 'PAUSED') {
+    return 'paused';
+  }
+  return 'active';
+}
+
 export function serializeSubscription(subscription: Subscription) {
   return {
     id: subscription.id,
     customerId: subscription.customerId,
-    status: subscription.status === 'ACTIVE' ? 'active' : 'canceled',
+    status: subscriptionStatus(subscription.status),
     amount: subscription.amount,
     currency: subscription.currency,
     planPriceId: subscription.planPriceId,
     interval: subscription.interval,
     metadata: subscription.metadata,
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+    pausedAt: subscription.pausedAt?.toISOString() ?? null,
+    currentPeriodStart: subscription.currentPeriodStart?.toISOString() ?? null,
+    currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
     canceledAt: subscription.canceledAt?.toISOString() ?? null,
     createdAt: subscription.createdAt.toISOString(),
     updatedAt: subscription.updatedAt.toISOString(),

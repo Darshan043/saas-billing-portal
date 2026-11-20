@@ -14,6 +14,7 @@ import {
   getPaymentGateway,
 } from '../../services/payment/paymentGateway';
 import { recordAudit } from '../audit/audit.service';
+import { capabilities } from './subscriptionRules';
 import {
   SIMULATOR_PAYMENT_TOKENS,
   type CreateSubscriptionInput,
@@ -21,27 +22,61 @@ import {
 
 const ALLOWED_TOKENS = new Set<string>(SIMULATOR_PAYMENT_TOKENS);
 
+export type SubscriptionCapabilities = {
+  canChangePlan: boolean;
+  canPause: boolean;
+  canResume: boolean;
+  canCancelNow: boolean;
+  canCancelAtPeriodEnd: boolean;
+  canUndoCancel: boolean;
+  canUndoScheduledChange: boolean;
+};
+
+export type PendingChangeView = {
+  planPriceId: string;
+  planName: string;
+  amount: number;
+  currency: string;
+  effectiveAt: string | null;
+};
+
 export type SubscriptionView = {
   id: string;
   status: SubscriptionStatus;
   planName: string;
+  planId: string;
+  planPriceId: string;
   interval: BillingInterval;
   amount: number;
   currency: string;
+  usageLimit: number;
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  pausedAt: string | null;
+  canceledAt: string | null;
+  endedAt: string | null;
+  pendingChange: PendingChangeView | null;
+  capabilities: SubscriptionCapabilities;
   createdAt: string;
   failureReason: string | null;
 };
 
 type SubscriptionWithPrice = Subscription & {
   planPrice: {
+    id: string;
+    planId: string;
     interval: BillingInterval;
     amount: number;
     currency: string;
-    plan: { name: string };
+    plan: { id: string; name: string; usageLimit: number };
   };
+  pendingPlanPrice?: {
+    id: string;
+    amount: number;
+    currency: string;
+    plan: { name: string };
+  } | null;
 };
 
 function isUniqueConstraint(err: unknown): boolean {
@@ -79,7 +114,7 @@ function snapshot(sub: {
   };
 }
 
-async function loadView(
+export async function loadSubscriptionView(
   subscription: SubscriptionWithPrice,
 ): Promise<SubscriptionView> {
   let failureReason: string | null = null;
@@ -100,23 +135,42 @@ async function loadView(
     }
   }
 
+  const pending = subscription.pendingPlanPrice ?? null;
+
   return {
     id: subscription.id,
     status: subscription.status,
     planName: subscription.planPrice.plan.name,
+    planId: subscription.planPrice.plan.id,
+    planPriceId: subscription.planPriceId,
     interval: subscription.planPrice.interval,
     amount: subscription.planPrice.amount,
     currency: subscription.planPrice.currency,
+    usageLimit: subscription.planPrice.plan.usageLimit,
     currentPeriodStart: subscription.currentPeriodStart?.toISOString() ?? null,
     currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
     cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+    pausedAt: subscription.pausedAt?.toISOString() ?? null,
+    canceledAt: subscription.canceledAt?.toISOString() ?? null,
+    endedAt: subscription.endedAt?.toISOString() ?? null,
+    pendingChange: pending
+      ? {
+          planPriceId: pending.id,
+          planName: pending.plan.name,
+          amount: pending.amount,
+          currency: pending.currency,
+          effectiveAt: subscription.currentPeriodEnd?.toISOString() ?? null,
+        }
+      : null,
+    capabilities: capabilities(subscription),
     createdAt: subscription.createdAt.toISOString(),
     failureReason,
   };
 }
 
-const withPrice = {
+const withPrices = {
   planPrice: { include: { plan: true } },
+  pendingPlanPrice: { include: { plan: true } },
 } as const;
 
 async function cancelPending(
@@ -327,9 +381,9 @@ export async function createCheckout(
 
   const current = await prisma.subscription.findUniqueOrThrow({
     where: { id: pending.id },
-    include: withPrice,
+    include: withPrices,
   });
-  return loadView(current);
+  return loadSubscriptionView(current);
 }
 
 export async function getCurrentSubscription(
@@ -338,10 +392,10 @@ export async function getCurrentSubscription(
   const subscription = await prisma.subscription.findFirst({
     where: { organizationId },
     orderBy: { createdAt: 'desc' },
-    include: withPrice,
+    include: withPrices,
   });
   if (!subscription) {
     return null;
   }
-  return loadView(subscription);
+  return loadSubscriptionView(subscription);
 }

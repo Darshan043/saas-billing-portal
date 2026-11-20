@@ -34,6 +34,7 @@ export async function clearSimulatorData(): Promise<void> {
   await prisma.webhookEvent.deleteMany();
   await prisma.invoice.deleteMany();
   await prisma.payment.deleteMany();
+  await prisma.subscriptionOp.deleteMany();
   await prisma.subscription.deleteMany();
   await prisma.paymentMethod.deleteMany();
   await prisma.customer.deleteMany();

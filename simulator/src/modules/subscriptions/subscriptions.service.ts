@@ -102,6 +102,10 @@ export async function createSubscription(input: {
       if (input.metadata) {
         activatedData.metadata = input.metadata;
       }
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { currentPeriodStart, currentPeriodEnd },
+      });
       await emitEvent(
         'subscription.activated',
         subscription.id,
@@ -182,6 +186,8 @@ export async function cancelSubscription(id: string) {
     data: {
       status: SubscriptionStatus.CANCELED,
       canceledAt: new Date(),
+      cancelAtPeriodEnd: false,
+      pausedAt: null,
     },
   });
   await emitEvent('subscription.cancelled', subscription.id, {
@@ -190,5 +196,259 @@ export async function cancelSubscription(id: string) {
     canceledAt: subscription.canceledAt?.toISOString() ?? null,
     status: 'canceled',
   });
+  return subscription;
+}
+
+function eventMetadata(subscription: {
+  metadata: Prisma.JsonValue | null;
+}): Record<string, unknown> | undefined {
+  if (
+    subscription.metadata &&
+    typeof subscription.metadata === 'object' &&
+    !Array.isArray(subscription.metadata)
+  ) {
+    return subscription.metadata as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+async function replayIfKnown(idempotencyKey: string | undefined) {
+  if (!idempotencyKey) {
+    return null;
+  }
+  const existing = await prisma.subscriptionOp.findUnique({
+    where: { idempotencyKey },
+  });
+  if (!existing) {
+    return null;
+  }
+  return getSubscription(existing.subscriptionId);
+}
+
+async function rememberOp(
+  idempotencyKey: string | undefined,
+  kind: string,
+  subscriptionId: string,
+): Promise<void> {
+  if (!idempotencyKey) {
+    return;
+  }
+  try {
+    await prisma.subscriptionOp.create({
+      data: { idempotencyKey, kind, subscriptionId },
+    });
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002'
+    ) {
+      return;
+    }
+    throw err;
+  }
+}
+
+function assertNotCanceled(
+  subscription: { status: SubscriptionStatus },
+  action: string,
+): void {
+  if (subscription.status === SubscriptionStatus.CANCELED) {
+    throw AppError.badRequest(
+      'SUBSCRIPTION_CANCELED',
+      `Cannot ${action} a canceled simulated subscription`,
+    );
+  }
+}
+
+export async function changeSubscriptionPlan(
+  id: string,
+  input: {
+    planPriceId: string;
+    amount: number;
+    currency: string;
+    chargeAmount: number;
+    token?: string;
+    description?: string;
+    metadata?: {
+      subscriptionId: string;
+      organizationId: string;
+      reason?: string;
+      description?: string;
+      fromPlanPriceId?: string;
+      toPlanPriceId?: string;
+    };
+  },
+  idempotencyKey?: string,
+) {
+  rejectRawCredentials(input, 'body');
+  const replayed = await replayIfKnown(idempotencyKey);
+  if (replayed) {
+    return replayed;
+  }
+
+  const current = await getSubscription(id);
+  assertNotCanceled(current, 'change');
+
+  let providerPaymentId: string | null = null;
+  if (input.chargeAmount > 0) {
+    const payment = await createPayment({
+      customerId: current.customerId,
+      amount: input.chargeAmount,
+      currency: input.currency,
+      token: input.token ?? 'tok_sim_visa_ok',
+      idempotencyKey,
+      subscriptionId: current.id,
+      description: input.description,
+      metadata: input.metadata,
+    });
+    if (payment.status !== PaymentStatus.SUCCEEDED) {
+      throw AppError.badRequest(
+        'PAYMENT_REJECTED',
+        payment.errorCode === 'INSUFFICIENT_FUNDS'
+          ? 'Insufficient funds'
+          : 'Card declined',
+      );
+    }
+    providerPaymentId = payment.id;
+  }
+
+  const metadata = input.metadata
+    ? (input.metadata as Prisma.InputJsonValue)
+    : current.metadata ?? undefined;
+  const subscription = await prisma.subscription.update({
+    where: { id },
+    data: {
+      amount: input.amount,
+      currency: input.currency,
+      planPriceId: input.planPriceId,
+      metadata,
+    },
+  });
+
+  const updatedData: Record<string, unknown> = {
+    subscriptionId: subscription.id,
+    customerId: subscription.customerId,
+    amount: subscription.amount,
+    currency: subscription.currency,
+    planPriceId: subscription.planPriceId,
+    status: 'active',
+  };
+  const echoed = input.metadata ?? eventMetadata(subscription);
+  if (echoed) {
+    updatedData.metadata = echoed;
+  }
+  if (providerPaymentId) {
+    updatedData.paymentId = providerPaymentId;
+  }
+  await emitEvent('subscription.updated', subscription.id, updatedData);
+  await rememberOp(idempotencyKey, 'change-plan', subscription.id);
+  return subscription;
+}
+
+export async function setCancelAtPeriodEnd(
+  id: string,
+  value: boolean,
+  idempotencyKey?: string,
+) {
+  const replayed = await replayIfKnown(idempotencyKey);
+  if (replayed) {
+    return replayed;
+  }
+  const current = await getSubscription(id);
+  assertNotCanceled(current, 'schedule cancellation for');
+  const subscription = await prisma.subscription.update({
+    where: { id },
+    data: { cancelAtPeriodEnd: value },
+  });
+  const data: Record<string, unknown> = {
+    subscriptionId: subscription.id,
+    customerId: subscription.customerId,
+    amount: subscription.amount,
+    currency: subscription.currency,
+    planPriceId: subscription.planPriceId,
+    status: 'active',
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+  };
+  const echoed = eventMetadata(subscription);
+  if (echoed) {
+    data.metadata = echoed;
+  }
+  await emitEvent('subscription.updated', subscription.id, data);
+  await rememberOp(idempotencyKey, 'cancel-at-period-end', subscription.id);
+  return subscription;
+}
+
+export async function pauseSubscription(
+  id: string,
+  idempotencyKey?: string,
+) {
+  const replayed = await replayIfKnown(idempotencyKey);
+  if (replayed) {
+    return replayed;
+  }
+  const current = await getSubscription(id);
+  assertNotCanceled(current, 'pause');
+  const subscription = await prisma.subscription.update({
+    where: { id },
+    data: {
+      status: SubscriptionStatus.PAUSED,
+      pausedAt: current.pausedAt ?? new Date(),
+    },
+  });
+  const data: Record<string, unknown> = {
+    subscriptionId: subscription.id,
+    customerId: subscription.customerId,
+    amount: subscription.amount,
+    currency: subscription.currency,
+    planPriceId: subscription.planPriceId,
+    status: 'paused',
+    pausedAt: subscription.pausedAt?.toISOString() ?? null,
+  };
+  const echoed = eventMetadata(subscription);
+  if (echoed) {
+    data.metadata = echoed;
+  }
+  await emitEvent('subscription.updated', subscription.id, data);
+  await rememberOp(idempotencyKey, 'pause', subscription.id);
+  return subscription;
+}
+
+export async function resumeSubscription(
+  id: string,
+  input: { currentPeriodEnd?: string },
+  idempotencyKey?: string,
+) {
+  const replayed = await replayIfKnown(idempotencyKey);
+  if (replayed) {
+    return replayed;
+  }
+  const current = await getSubscription(id);
+  assertNotCanceled(current, 'resume');
+  const periodEnd = input.currentPeriodEnd
+    ? new Date(input.currentPeriodEnd)
+    : current.currentPeriodEnd;
+  const subscription = await prisma.subscription.update({
+    where: { id },
+    data: {
+      status: SubscriptionStatus.ACTIVE,
+      pausedAt: null,
+      currentPeriodEnd: periodEnd,
+    },
+  });
+  const data: Record<string, unknown> = {
+    subscriptionId: subscription.id,
+    customerId: subscription.customerId,
+    amount: subscription.amount,
+    currency: subscription.currency,
+    planPriceId: subscription.planPriceId,
+    status: 'active',
+    currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
+  };
+  const echoed = eventMetadata(subscription);
+  if (echoed) {
+    data.metadata = echoed;
+  }
+  await emitEvent('subscription.updated', subscription.id, data);
+  await rememberOp(idempotencyKey, 'resume', subscription.id);
   return subscription;
 }
