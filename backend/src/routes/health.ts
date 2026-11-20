@@ -1,10 +1,12 @@
-import { Router } from 'express';
+
+import { Router, type Request, type Response } from 'express';
 import { pool } from '../lib/db';
 
 export const healthRouter = Router();
 
-healthRouter.get('/health', async (_req, res) => {
+healthRouter.get('/health', async (_req: Request, res: Response) => {
   const database = await checkDatabase();
+
   res.status(200).json({
     status: 'ok',
     service: 'backend',
@@ -18,9 +20,12 @@ async function checkDatabase(): Promise<'up' | 'down'> {
     const timeout = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('database check timed out')), 2000);
     });
+
     await Promise.race([pool.query('SELECT 1'), timeout]);
+
     return 'up';
   } catch {
     return 'down';
   }
 }
+
