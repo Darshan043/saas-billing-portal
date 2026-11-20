@@ -14,6 +14,7 @@ import {
   adminPlansRouter,
   publicPlansRouter,
 } from './modules/plans/plans.routes';
+import { subscriptionsRouter } from './modules/subscriptions/subscriptions.routes';
 import { webhooksRouter } from './modules/webhooks/webhooks.routes';
 import { healthRouter } from './routes/health';
 
@@ -64,6 +65,7 @@ app.use(healthRouter);
 app.use('/auth', authRouter);
 app.use('/orgs', organizationsRouter);
 app.use('/plans', publicPlansRouter);
+app.use('/subscriptions', subscriptionsRouter);
 app.use('/admin/plans', adminPlansRouter);
 app.use('/admin', adminRouter);
 

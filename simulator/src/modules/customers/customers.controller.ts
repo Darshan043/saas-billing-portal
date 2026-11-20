@@ -6,8 +6,20 @@ import {
   getCustomer,
 } from './customers.service';
 
+function idempotencyKeyFrom(req: Request): string | undefined {
+  const header = req.header('idempotency-key')?.trim();
+  if (header) {
+    return header;
+  }
+  const bodyKey = req.body?.idempotencyKey;
+  return typeof bodyKey === 'string' ? bodyKey.trim() || undefined : undefined;
+}
+
 export async function create(req: Request, res: Response): Promise<void> {
-  const customer = await createCustomer(req.body);
+  const customer = await createCustomer({
+    ...req.body,
+    idempotencyKey: idempotencyKeyFrom(req),
+  });
   res.status(201).json({ customer: serializeCustomer(customer) });
 }
 

@@ -17,5 +17,6 @@ describe('loadEnv', () => {
       JWT_SECRET: 'dev-only-test-jwt-secret-32chars-min',
     });
     expect(parsed.WEBHOOK_JOB_RETRY_LIMIT).toBe(5);
+    expect(parsed.SUBSCRIPTION_PENDING_TIMEOUT_MINUTES).toBe(15);
   });
 });

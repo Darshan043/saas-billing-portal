@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useAuth } from '../auth/AuthContext';
 import { ApiError } from '../lib/api';
@@ -27,6 +27,8 @@ function destinationFor(role: 'CUSTOMER' | 'ADMIN'): string {
 export function Register() {
   const { user, isLoading, register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from;
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -37,7 +39,12 @@ export function Register() {
   const [submitting, setSubmitting] = useState(false);
 
   if (!isLoading && user) {
-    return <Navigate to={destinationFor(user.role)} replace />;
+    return (
+      <Navigate
+        to={from && from !== '/login' && from !== '/register' ? from : destinationFor(user.role)}
+        replace
+      />
+    );
   }
 
   async function onSubmit(event: FormEvent) {
@@ -69,7 +76,12 @@ export function Register() {
         parsed.data.password,
         parsed.data.organizationName,
       );
-      navigate(destinationFor(created.role), { replace: true });
+      navigate(
+        from && from !== '/login' && from !== '/register'
+          ? from
+          : destinationFor(created.role),
+        { replace: true },
+      );
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.details?.length) {

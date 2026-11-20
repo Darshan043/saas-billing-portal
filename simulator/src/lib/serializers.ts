@@ -58,6 +58,8 @@ export function serializeSubscription(subscription: Subscription) {
     amount: subscription.amount,
     currency: subscription.currency,
     planPriceId: subscription.planPriceId,
+    interval: subscription.interval,
+    metadata: subscription.metadata,
     canceledAt: subscription.canceledAt?.toISOString() ?? null,
     createdAt: subscription.createdAt.toISOString(),
     updatedAt: subscription.updatedAt.toISOString(),

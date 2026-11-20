@@ -1,9 +1,21 @@
-import { InvoiceStatus, SubscriptionStatus } from '@prisma/client';
+import {
+  BillingInterval,
+  InvoiceStatus,
+  PaymentStatus,
+  Prisma,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { AppError } from '../../lib/errors';
+import { periodDates } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
 import { rejectRawCredentials } from '../../lib/tokens';
 import { createPayment } from '../payments/payments.service';
 import { emitEvent } from '../webhooks/webhook.service';
+
+export type SubscriptionMetadata = {
+  subscriptionId: string;
+  organizationId: string;
+};
 
 export async function getSubscription(id: string) {
   const subscription = await prisma.subscription.findUnique({ where: { id } });
@@ -22,6 +34,8 @@ export async function createSubscription(input: {
   currency: string;
   planPriceId?: string;
   token?: string;
+  interval?: BillingInterval;
+  metadata?: SubscriptionMetadata;
 }) {
   rejectRawCredentials(input, 'body');
   const customer = await prisma.customer.findUnique({
@@ -31,6 +45,7 @@ export async function createSubscription(input: {
     throw AppError.notFound('CUSTOMER_NOT_FOUND', 'Simulated customer not found');
   }
 
+  const interval = input.interval ?? BillingInterval.MONTH;
   const subscription = await prisma.subscription.create({
     data: {
       customerId: input.customerId,
@@ -38,17 +53,26 @@ export async function createSubscription(input: {
       amount: input.amount,
       currency: input.currency,
       planPriceId: input.planPriceId,
+      interval,
+      metadata: input.metadata
+        ? (input.metadata as Prisma.InputJsonValue)
+        : undefined,
     },
   });
 
-  await emitEvent('subscription.created', subscription.id, {
+  const createdData: Record<string, unknown> = {
     subscriptionId: subscription.id,
     customerId: subscription.customerId,
     amount: subscription.amount,
     currency: subscription.currency,
     planPriceId: subscription.planPriceId,
     status: 'active',
-  });
+  };
+  if (input.metadata) {
+    createdData.metadata = input.metadata;
+  }
+
+  await emitEvent('subscription.created', subscription.id, createdData);
 
   if (input.token) {
     const payment = await createPayment({
@@ -56,11 +80,34 @@ export async function createSubscription(input: {
       amount: input.amount,
       currency: input.currency,
       token: input.token,
+      subscriptionId: subscription.id,
+      metadata: input.metadata,
     });
     await prisma.invoice.update({
       where: { paymentId: payment.id },
       data: { subscriptionId: subscription.id },
     });
+    if (payment.status === PaymentStatus.SUCCEEDED) {
+      const { currentPeriodStart, currentPeriodEnd } = periodDates(interval);
+      const activatedData: Record<string, unknown> = {
+        subscriptionId: subscription.id,
+        customerId: subscription.customerId,
+        amount: subscription.amount,
+        currency: subscription.currency,
+        planPriceId: subscription.planPriceId,
+        status: 'active',
+        currentPeriodStart: currentPeriodStart.toISOString(),
+        currentPeriodEnd: currentPeriodEnd.toISOString(),
+      };
+      if (input.metadata) {
+        activatedData.metadata = input.metadata;
+      }
+      await emitEvent(
+        'subscription.activated',
+        subscription.id,
+        activatedData,
+      );
+    }
   } else {
     const invoice = await prisma.invoice.create({
       data: {

@@ -21,6 +21,9 @@ export async function importApp(): Promise<Express> {
 }
 
 export async function clearTestUsersAndOrgs(): Promise<void> {
+  await prisma.auditLog.deleteMany();
+  await prisma.payment.deleteMany();
+  await prisma.subscription.deleteMany();
   await prisma.membership.deleteMany();
   await prisma.user.deleteMany();
   await prisma.organization.deleteMany();

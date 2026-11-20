@@ -219,6 +219,60 @@ describe('webhooks', () => {
     expect(unchanged.amount).toBe(2200);
   });
 
+  it('replays and duplicates subscription.activated with the same id and payload', async () => {
+    const fetchMock = stubWebhookFetch();
+    const app = await importApp();
+    const customerId = (await createTestCustomer(app)).body.customer.id;
+    const metadata = {
+      subscriptionId: crypto.randomUUID(),
+      organizationId: crypto.randomUUID(),
+    };
+    await api(app).post('/v1/subscriptions').send({
+      customerId,
+      amount: 900,
+      currency: 'USD',
+      token: 'tok_sim_visa_ok',
+      metadata,
+    });
+
+    const activated = await prisma.webhookEvent.findFirstOrThrow({
+      where: { type: 'subscription.activated' },
+    });
+    const originalBody = activated.rawBody;
+    const originalId = activated.id;
+
+    await replayEvent(activated.id);
+    await duplicateEvent(activated.id);
+
+    const after = await prisma.webhookEvent.findUniqueOrThrow({
+      where: { id: originalId },
+    });
+    expect(after.id).toBe(originalId);
+    expect(after.rawBody).toBe(originalBody);
+    expect(JSON.parse(after.rawBody)).toMatchObject({
+      id: originalId,
+      type: 'subscription.activated',
+      data: { metadata },
+    });
+
+    const deliveries = await prisma.webhookDelivery.findMany({
+      where: { eventId: originalId },
+      orderBy: { attemptNumber: 'asc' },
+    });
+    expect(deliveries.map((item) => item.reason)).toEqual([
+      DeliveryReason.INITIAL,
+      DeliveryReason.REPLAY,
+      DeliveryReason.DUPLICATE,
+    ]);
+
+    const deliveredBodies = fetchMock.mock.calls
+      .filter(([input]) => String(input).includes('/webhooks/payments'))
+      .map(([, init]) => String(init?.body ?? ''))
+      .filter((body) => body.includes('subscription.activated'));
+    expect(deliveredBodies.length).toBe(3);
+    expect(new Set(deliveredBodies).size).toBe(1);
+  });
+
   it('protects manual controls with the control token', async () => {
     const app = await importApp();
     const res = await api(app).post('/sim/events/fail-next').send({});
