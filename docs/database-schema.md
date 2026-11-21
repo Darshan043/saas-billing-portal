@@ -1,6 +1,6 @@
 # Database schema
 
-Core Postgres schema owned by the backend Prisma project (`backend/prisma/schema.prisma`). Money is always integer minor units plus a 3-letter currency code. The payment simulator has its own data in a later step. pg-boss (Step 8) creates a separate schema and is not modelled here.
+Core Postgres schema owned by the backend Prisma project (`backend/prisma/schema.prisma`). Money is always integer minor units plus a 3-letter currency code. The payment simulator stores its own data in a separate Postgres database (`billinghub_sim`, Prisma project `simulator/prisma`). It does not share tables with BillingHub. See [payment-simulator.md](payment-simulator.md). pg-boss (Step 8) creates a separate schema and is not modelled here.
 
 ## Entity relationship diagram
 
@@ -147,8 +147,8 @@ erDiagram
 | `users` | Login accounts (customer or admin) | Step 3 auth |
 | `organizations` | Billing customer / tenant | Step 4 onboarding |
 | `memberships` | User belongs to one org (unique on `user_id`; can be relaxed later) | Step 4 |
-| `plans` | Catalog of products and usage limits | Step 5 catalog |
-| `plan_prices` | Versioned MONTH/YEAR prices in minor units | Step 5 catalog |
+| `plans` | Catalog of products and usage limits | Step 5 (this step) |
+| `plan_prices` | Versioned MONTH/YEAR prices in minor units | Step 5 (this step) |
 | `subscriptions` | Org's current (or historical canceled) plan | Step 7 subscribe |
 | `invoices` | Sequential per-org invoices | Step 10 invoicing |
 | `invoice_items` | Line items; cascade-deleted with invoice | Step 10 |

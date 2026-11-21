@@ -21,9 +21,11 @@ Fixed decisions for this project. Later steps should follow these instead of ren
 | ---------- | ------------------------------------------------- | ------------- |
 | frontend   | Customer / operator UI                            | Step 1        |
 | backend    | HTTP API                                          | Step 1        |
-| worker     | Background jobs (emails, dunning, webhooks)       | Step 8        |
-| simulator  | Labelled payment provider. No real money.         | Step 1        |
+| worker     | Background jobs (webhook events now; emails/dunning later) | Step 8 |
+| simulator  | Labelled payment provider. No real money. Own DB `billinghub_sim`, HMAC webhooks, dashboard on :4100. | Step 6 |
 | postgres   | Primary database                                  | Step 1        |
 | mailpit    | Local SMTP catcher and web UI                     | Step 1        |
 
 The payment provider is a simulator. It must stay clearly labelled so nobody treats it as a live gateway.
+
+Step 11 added simulator lifecycle routes (`change-plan`, `cancel-at-period-end`, `pause`, `resume`) without renaming `subscription.cancelled`. See [payment-simulator.md](payment-simulator.md).

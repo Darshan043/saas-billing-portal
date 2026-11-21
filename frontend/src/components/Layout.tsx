@@ -17,6 +17,7 @@ export function Layout() {
           BillingHub
         </Link>
         <nav className="nav-links">
+          <Link to="/pricing">Pricing</Link>
           {!isLoading && !user && (
             <>
               <Link to="/login">Login</Link>
@@ -26,8 +27,26 @@ export function Layout() {
           {user && (
             <>
               <Link to="/app">App</Link>
-              {user.role === 'ADMIN' && <Link to="/admin">Admin</Link>}
-              <span className="nav-user">{user.name}</span>
+              {user.role === 'CUSTOMER' && user.organization && (
+                <>
+                  <Link to="/app/subscription">Manage subscription</Link>
+                  <Link to="/app/billing/invoices">Invoices</Link>
+                  <Link to="/app/billing/payments">Payments</Link>
+                  <Link to="/app/settings/organization">Organization settings</Link>
+                </>
+              )}
+              {user.role === 'ADMIN' && (
+                <>
+                  <Link to="/admin">Admin</Link>
+                  <Link to="/admin/plans">Plans</Link>
+                </>
+              )}
+              <span className="nav-user">
+                {user.name}
+                {user.role === 'CUSTOMER' && user.organization
+                  ? ` · ${user.organization.name}`
+                  : ''}
+              </span>
               <button
                 type="button"
                 className="link-button"

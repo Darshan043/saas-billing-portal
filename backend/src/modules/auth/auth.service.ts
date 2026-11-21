@@ -1,4 +1,4 @@
-import { UserRole } from '@prisma/client';
+import { MembershipRole, UserRole } from '@prisma/client';
 import { AppError } from '../../lib/errors';
 import { signAccessToken } from '../../lib/jwt';
 import {
@@ -9,25 +9,61 @@ import {
 import { prisma } from '../../lib/prisma';
 import type { LoginInput, RegisterInput } from './auth.schemas';
 
+export type PublicOrganization = {
+  id: string;
+  name: string;
+  membershipRole: MembershipRole;
+};
+
 export type PublicUser = {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  organization: PublicOrganization | null;
 };
+
+const userWithOrgInclude = {
+  memberships: {
+    include: { organization: true },
+  },
+} as const;
 
 function toPublicUser(user: {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  memberships?: Array<{
+    role: MembershipRole;
+    organization: { id: string; name: string };
+  }>;
 }): PublicUser {
+  const membership = user.memberships?.[0];
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     role: user.role,
+    organization: membership
+      ? {
+          id: membership.organization.id,
+          name: membership.organization.name,
+          membershipRole: membership.role,
+        }
+      : null,
   };
+}
+
+async function loadPublicUser(userId: string): Promise<PublicUser | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: userWithOrgInclude,
+  });
+  if (!user) {
+    return null;
+  }
+  return toPublicUser(user);
 }
 
 export async function registerUser(
@@ -44,18 +80,51 @@ export async function registerUser(
   }
 
   const passwordHash = await hashPassword(input.password);
-  const user = await prisma.user.create({
-    data: {
-      name: input.name,
-      email: input.email,
-      passwordHash,
-      role: UserRole.CUSTOMER,
-      lastLoginAt: new Date(),
-    },
+
+  const created = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        name: input.name,
+        email: input.email,
+        passwordHash,
+        role: UserRole.CUSTOMER,
+        lastLoginAt: new Date(),
+      },
+    });
+    const organization = await tx.organization.create({
+      data: {
+        name: input.organizationName,
+        billingEmail: input.email,
+      },
+    });
+    const membership = await tx.membership.create({
+      data: {
+        userId: user.id,
+        organizationId: organization.id,
+        role: MembershipRole.OWNER,
+      },
+    });
+    return { user, organization, membership };
   });
 
-  const token = signAccessToken({ id: user.id, role: user.role });
-  return { user: toPublicUser(user), token };
+  const token = signAccessToken({
+    id: created.user.id,
+    role: created.user.role,
+  });
+  return {
+    user: {
+      id: created.user.id,
+      name: created.user.name,
+      email: created.user.email,
+      role: created.user.role,
+      organization: {
+        id: created.organization.id,
+        name: created.organization.name,
+        membershipRole: created.membership.role,
+      },
+    },
+    token,
+  };
 }
 
 export async function loginUser(
@@ -88,18 +157,24 @@ export async function loginUser(
     );
   }
 
-  const updated = await prisma.user.update({
+  await prisma.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
   });
 
-  const token = signAccessToken({ id: updated.id, role: updated.role });
-  return { user: toPublicUser(updated), token };
+  const publicUser = await loadPublicUser(user.id);
+  if (!publicUser) {
+    throw AppError.unauthorized('UNAUTHENTICATED', 'Authentication required');
+  }
+
+  const token = signAccessToken({ id: publicUser.id, role: publicUser.role });
+  return { user: publicUser, token };
 }
 
 export async function getCurrentUser(userId: string): Promise<PublicUser> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
+    include: userWithOrgInclude,
   });
   if (!user || !user.isActive) {
     throw AppError.unauthorized('UNAUTHENTICATED', 'Authentication required');

@@ -1,38 +1,54 @@
 import express from 'express';
 import pinoHttp from 'pino-http';
 import { logger } from './lib/logger';
+import { rejectRawCredentials } from './lib/tokens';
+import { errorHandler } from './middleware/errorHandler';
+import { notFound } from './middleware/notFound';
+import { dashboardHtml } from './modules/dashboard/dashboard.html';
+import { customersRouter } from './modules/customers/customers.routes';
+import { invoicesRouter } from './modules/invoices/invoices.routes';
+import { paymentsRouter } from './modules/payments/payments.routes';
+import { simRouter } from './modules/sim/sim.routes';
+import { subscriptionsRouter } from './modules/subscriptions/subscriptions.routes';
 import { healthRouter } from './routes/health';
 
 export const app = express();
 
-app.use(express.json());
-app.use(pinoHttp({ logger }));
+app.use(express.json({ limit: '100kb' }));
+app.use(
+  pinoHttp({
+    logger,
+    serializers: {
+      req(req) {
+        return {
+          id: req.id,
+          method: req.method,
+          url: req.url,
+        };
+      },
+      res(res) {
+        return { statusCode: res.statusCode };
+      },
+    },
+  }),
+);
+app.use((req, _res, next) => {
+  if (req.body && typeof req.body === 'object') {
+    rejectRawCredentials(req.body, 'body');
+  }
+  next();
+});
+
 app.use(healthRouter);
+app.use('/v1/customers', customersRouter);
+app.use('/v1/payments', paymentsRouter);
+app.use('/v1/subscriptions', subscriptionsRouter);
+app.use('/v1/invoices', invoicesRouter);
+app.use('/sim', simRouter);
 
 app.get('/', (_req, res) => {
-  res.type('html').send(`<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Payment Simulator</title>
-    <style>
-      body { font-family: sans-serif; margin: 0; color: #1f2937; background: #fff; }
-      .banner {
-        background: #b45309;
-        color: #fff;
-        padding: 1rem 1.5rem;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-      }
-      main { padding: 1.5rem; }
-    </style>
-  </head>
-  <body>
-    <div class="banner">SIMULATOR - no real money</div>
-    <main>
-      <p>This service is a labelled payment simulator. It never moves real money.</p>
-    </main>
-  </body>
-</html>`);
+  res.type('html').send(dashboardHtml());
 });
+
+app.use(notFound);
+app.use(errorHandler);

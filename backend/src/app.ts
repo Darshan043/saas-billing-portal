@@ -9,23 +9,38 @@ import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { adminRouter } from './modules/admin/admin.routes';
 import { authRouter } from './modules/auth/auth.routes';
+import { invoicesRouter } from './modules/invoices/invoices.routes';
+import { organizationsRouter } from './modules/organizations/organizations.routes';
+import { paymentsRouter } from './modules/payments/payments.routes';
+import {
+  adminPlansRouter,
+  publicPlansRouter,
+} from './modules/plans/plans.routes';
+import { subscriptionsRouter } from './modules/subscriptions/subscriptions.routes';
+import { webhooksRouter } from './modules/webhooks/webhooks.routes';
 import { healthRouter } from './routes/health';
-
+import { adminDiagnosticRouter } from './modules/admin/diagnostic.routes';
 export const app = express();
 
 app.use(helmet());
 app.use(cookieParser());
-app.use(
-  cors({
-    origin: env.FRONTEND_ORIGIN,
-    credentials: true,
-  }),
-);
 
-// --- Step 7: payment webhook (raw body) ---
-// Register POST /webhooks/payments HERE, before express.json(), so the
-// route can verify the provider signature against the raw request bytes.
-// Do not implement it in this step.
+const corsMiddleware = cors({
+  origin: env.FRONTEND_ORIGIN,
+  credentials: true,
+  exposedHeaders: ['Content-Disposition'],
+});
+app.use((req, res, next) => {
+  if (req.path.startsWith('/webhooks')) {
+    next();
+    return;
+  }
+  corsMiddleware(req, res, next);
+});
+
+// Raw-body webhook receiver. Must stay before express.json() so HMAC
+// verification uses the exact request bytes, not re-serialized JSON.
+app.use('/webhooks', webhooksRouter);
 
 app.use(express.json({ limit: '100kb' }));
 app.use(
@@ -51,7 +66,15 @@ app.use(
 
 app.use(healthRouter);
 app.use('/auth', authRouter);
+app.use('/orgs', organizationsRouter);
+app.use('/plans', publicPlansRouter);
+app.use('/subscriptions', subscriptionsRouter);
+app.use('/invoices', invoicesRouter);
+app.use('/payments', paymentsRouter);
+app.use('/admin/plans', adminPlansRouter);
 app.use('/admin', adminRouter);
+// Diagnostic admin route (read‑only, admin‑only)
+app.use('/admin/diagnostic', adminDiagnosticRouter);
 
 app.use(notFound);
 app.use(errorHandler);

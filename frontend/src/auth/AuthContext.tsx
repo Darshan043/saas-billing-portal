@@ -10,19 +10,34 @@ import {
 } from 'react';
 import { ApiError, api } from '../lib/api';
 
+export type MembershipRole = 'OWNER' | 'MEMBER';
+
+export type UserOrganization = {
+  id: string;
+  name: string;
+  membershipRole: MembershipRole;
+};
+
 export type User = {
   id: string;
   name: string;
   email: string;
   role: 'CUSTOMER' | 'ADMIN';
+  organization: UserOrganization | null;
 };
 
 type AuthContextValue = {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User>;
-  register: (name: string, email: string, password: string) => Promise<User>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    organizationName: string,
+  ) => Promise<User>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<User | null>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -32,6 +47,20 @@ type UserResponse = { user: User };
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const data = await api<UserResponse>('/auth/me');
+      setUser(data.user);
+      return data.user;
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 401)) {
+        console.error(err);
+      }
+      setUser(null);
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,10 +101,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const register = useCallback(
-    async (name: string, email: string, password: string) => {
+    async (
+      name: string,
+      email: string,
+      password: string,
+      organizationName: string,
+    ) => {
       const data = await api<UserResponse>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, organizationName }),
       });
       setUser(data.user);
       return data.user;
@@ -89,8 +123,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, isLoading, login, register, logout }),
-    [user, isLoading, login, register, logout],
+    () => ({ user, isLoading, login, register, logout, refreshUser }),
+    [user, isLoading, login, register, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

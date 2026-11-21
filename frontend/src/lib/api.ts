@@ -55,3 +55,43 @@ export async function api<T>(
 
   return data as T;
 }
+
+function filenameFromContentDisposition(header: string | null): string {
+  if (!header) {
+    return 'invoice.pdf';
+  }
+  const quoted = /filename="([^"]+)"/i.exec(header);
+  if (quoted?.[1]) {
+    return quoted[1];
+  }
+  const plain = /filename=([^;]+)/i.exec(header);
+  return plain?.[1]?.trim() || 'invoice.pdf';
+}
+
+export async function downloadBinary(
+  path: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${apiUrl}${path}`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    let message = 'Request failed';
+    let code = 'INTERNAL_ERROR';
+    try {
+      const body = text ? (JSON.parse(text) as ApiErrorBody) : null;
+      message = body?.error?.message ?? message;
+      code = body?.error?.code ?? code;
+    } catch {
+      // PDF or other non-JSON error body
+    }
+    throw new ApiError(response.status, code, message);
+  }
+  const blob = await response.blob();
+  return {
+    blob,
+    filename: filenameFromContentDisposition(
+      response.headers.get('Content-Disposition'),
+    ),
+  };
+}

@@ -1,0 +1,126 @@
+/* ============================================================
+   DESIGN TOKENS — BillingHub SaaS Portal
+   Single source of truth for all design values.
+   ============================================================ */
+:root {
+  /* ── Colour palette ─────────────────────────────────────── */
+
+  /* Slate / Navy scale */
+  --color-navy-50:  #f8fafc;
+  --color-navy-100: #f1f5f9;
+  --color-navy-200: #e2e8f0;
+  --color-navy-300: #cbd5e1;
+  --color-navy-400: #94a3b8;
+  --color-navy-500: #64748b;
+  --color-navy-600: #475569;
+  --color-navy-700: #334155;
+  --color-navy-800: #1e293b;
+  --color-navy-900: #0f172a;
+
+  /* Blue / Primary scale */
+  --color-primary-50:  #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+
+  /* Green / Success scale */
+  --color-success-50:  #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-200: #bbf7d0;
+  --color-success-300: #86efac;
+  --color-success-700: #15803d;
+  --color-success-800: #166534;
+
+  /* Amber / Warning scale */
+  --color-warning-50:  #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-200: #fde68a;
+  --color-warning-700: #b45309;
+  --color-warning-800: #92400e;
+
+  /* Red / Danger scale */
+  --color-danger-50:  #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-200: #fecaca;
+  --color-danger-700: #b91c1c;
+  --color-danger-800: #991b1b;
+
+  /* Orange — simulator notice only */
+  --color-orange-50:  #fff7ed;
+  --color-orange-200: #fdba74;
+  --color-orange-800: #9a3412;
+
+  /* ── Semantic surface tokens ────────────────────────────── */
+  --color-bg:                #f1f5f9;
+  --color-surface:           #ffffff;
+  --color-surface-secondary: #f8fafc;
+  --color-border:            #e2e8f0;
+  --color-border-strong:     #cbd5e1;
+
+  /* ── Semantic text tokens ───────────────────────────────── */
+  --color-text-primary:   #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted:     #64748b;
+  --color-text-disabled:  #94a3b8;
+
+  /* ── Action / interactive tokens ────────────────────────── */
+  --color-action-primary:       #1d4ed8;
+  --color-action-primary-hover: #1e40af;
+  --color-action-primary-text:  #ffffff;
+
+  /* ── Typography ─────────────────────────────────────────── */
+  --font-family:    system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --font-size-xs:   0.75rem;    /*  12px */
+  --font-size-sm:   0.875rem;   /*  14px */
+  --font-size-base: 1rem;       /*  16px */
+  --font-size-lg:   1.125rem;   /*  18px */
+  --font-size-xl:   1.25rem;    /*  20px */
+  --font-size-2xl:  1.5rem;     /*  24px */
+  --font-size-3xl:  1.875rem;   /*  30px */
+  --font-size-4xl:  2.25rem;    /*  36px */
+
+  --font-weight-normal:   400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  --line-height-tight:  1.25;
+  --line-height-snug:   1.375;
+  --line-height-normal: 1.5;
+
+  /* ── Spacing (4 px base unit) ───────────────────────────── */
+  --space-1:  0.25rem;   /*  4px */
+  --space-2:  0.5rem;    /*  8px */
+  --space-3:  0.75rem;   /* 12px */
+  --space-4:  1rem;      /* 16px */
+  --space-5:  1.25rem;   /* 20px */
+  --space-6:  1.5rem;    /* 24px */
+  --space-7:  1.75rem;   /* 28px */
+  --space-8:  2rem;      /* 32px */
+  --space-10: 2.5rem;    /* 40px */
+  --space-12: 3rem;      /* 48px */
+  --space-16: 4rem;      /* 64px */
+
+  /* ── Border radius ──────────────────────────────────────── */
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full: 9999px;
+
+  /* ── Box shadows ────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.07), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.08), 0 4px 6px rgba(15, 23, 42, 0.04);
+
+  /* ── Transitions ────────────────────────────────────────── */
+  --transition-fast:   150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow:   300ms ease;
+}

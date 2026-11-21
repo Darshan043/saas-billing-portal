@@ -15,6 +15,7 @@ export const registerSchema = z.object({
     .email()
     .transform((value) => value.toLowerCase()),
   password: passwordSchema,
+  organizationName: z.string().trim().min(2).max(100),
 });
 
 export const loginSchema = z.object({
