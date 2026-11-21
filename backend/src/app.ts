@@ -19,7 +19,7 @@ import {
 import { subscriptionsRouter } from './modules/subscriptions/subscriptions.routes';
 import { webhooksRouter } from './modules/webhooks/webhooks.routes';
 import { healthRouter } from './routes/health';
-
+import { adminDiagnosticRouter } from './modules/admin/diagnostic.routes';
 export const app = express();
 
 app.use(helmet());
@@ -73,6 +73,8 @@ app.use('/invoices', invoicesRouter);
 app.use('/payments', paymentsRouter);
 app.use('/admin/plans', adminPlansRouter);
 app.use('/admin', adminRouter);
+// Diagnostic admin route (read‑only, admin‑only)
+app.use('/admin/diagnostic', adminDiagnosticRouter);
 
 app.use(notFound);
 app.use(errorHandler);
